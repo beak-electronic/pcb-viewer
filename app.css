@@ -8,7 +8,7 @@ header#kopf { flex:none; display:flex; align-items:center; gap:16px; background:
   padding:calc(env(safe-area-inset-top) + 8px) calc(env(safe-area-inset-right) + 14px) 8px calc(env(safe-area-inset-left) + 14px); min-height:60px; }
 .marke { display:flex; align-items:center; white-space:nowrap; }
 .marke .logo { display:block; height:28px; width:auto; }
-.projekt { font-size:15px; font-weight:600; color:#000; white-space:nowrap; overflow:hidden; text-overflow:ellipsis; min-width:0; }
+.projekt { font-size:17px; font-weight:700; color:var(--grau); white-space:nowrap; overflow:hidden; text-overflow:ellipsis; min-width:0; }
 nav#tabs { display:flex; gap:6px; flex:1; justify-content:flex-end; flex-wrap:wrap; align-items:center; }
 #ansichtTabs { display:flex; gap:6px; }
 .tab { background:transparent; color:var(--fix); border:1px solid #BDB9BA; border-radius:10px; min-height:44px; padding:0 14px; font-size:16px; font-weight:600; display:inline-flex; align-items:center; cursor:pointer; }
