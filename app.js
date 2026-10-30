@@ -523,7 +523,7 @@ $('#sucheWrap').addEventListener('submit', e => { e.preventDefault(); sucheAus()
 $('#suche').addEventListener('keydown', e => { if (e.key === 'Enter') { e.preventDefault(); sucheAus(); } });
 document.addEventListener('keydown', e => { if (e.key === 'Escape') select(null); });
 const TH = ['system', 'light', 'dark'], THN = { system: 'Anzeige: System', light: 'Anzeige: Hell', dark: 'Anzeige: Dunkel' };
-$('#thema').addEventListener('click', () => { const t = TH[(TH.indexOf(window.beakTheme()) + 1) % 3]; window.beakTheme(t); $('#thema').title = THN[t]; });
+$('#thema').addEventListener('click', () => { const t = document.documentElement.classList.contains('ist-dunkel') ? 'light' : 'dark'; window.beakTheme(t); $('#thema').title = THN[t]; });
 $('#thema').title = THN[window.beakTheme()];
 // Trenner
 (() => { const tr = $('#trenner'), panes = $('#panes'); let v = +localStorage.getItem('beak-pcbv-split') || 50; const setv = x => { v = Math.min(85, Math.max(15, x)); panes.style.setProperty('--split', v + '%'); };
