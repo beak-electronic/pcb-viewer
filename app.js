@@ -335,14 +335,16 @@ function schGroupAt(p) { const s = curSheet(); if (!s) return null; let best = n
   for (const g in s.r.groups) for (const sg of s.r.groups[g].segs) { if (sg.length === 1) { const dd = Math.hypot(p.x - sg[0][0], p.y + sg[0][1]); if (dd < Math.max(bd, 6) && dd < (best ? bd : 99)) { bd = dd; best = +g; } continue; }
     for (let k = 1; k < sg.length; k++) { const a = sg[k - 1], b = sg[k], ax = a[0], ay = -a[1], dx = b[0] - ax, dy = -b[1] - ay, l2 = dx * dx + dy * dy, t = l2 ? Math.max(0, Math.min(1, ((p.x - ax) * dx + (p.y - ay) * dy) / l2)) : 0, dd = Math.hypot(p.x - ax - t * dx, p.y - ay - t * dy); if (dd < bd) { bd = dd; best = +g; } } }
   return best; }
-function compAt(where, q) { let best = null, ba = Infinity;
+function compAt(where, q, sideOnly) { let best = null, ba = Infinity; const vis = c => !sideOnly || (S.side === 'unten' ? c.layer === 'BOTTOM' : c.layer !== 'BOTTOM');
   if (where === 'sch') for (const c of Object.values(curSheet().r.comps)) for (const pt of c.parts) if (inside(pt.bb, q) && area(pt.bb) < ba) { ba = area(pt.bb); best = c.des; }
-  if (where === 'pcb') S.pcb.boxes.forEach((b, i) => { if (b && inside(b, q) && area(b) < ba) { ba = area(b); best = S.pcb.data.comps[i].des; } });
+  if (where === 'pcb') S.pcb.boxes.forEach((b, i) => { if (b && vis(S.pcb.data.comps[i]) && inside(b, q) && area(b) < ba) { ba = area(b); best = S.pcb.data.comps[i].des; } });
   return best; }
 function pick(where, p) {
   if (where === 'sch' && curSheet()) { const g = schGroupAt(p); if (g !== null) { S.sel = null; setNet({ sheet: S.sheet, g }, 'sch'); return select(null, 'sch', true); } setNet(null); return select(compAt('sch', p), 'sch'); }
   if ((where === 'pcb' || where === '3d') && S.pcb) { const q = where === 'pcb' && S.side === 'unten' ? { x: -p.x, y: p.y } : p; const h = pcbHitAt(q.x, -q.y);
-    if (h && h.kind === 'pad') { setNet(h.net >= 0 ? { n: h.net } : null, 'pcb'); return select(h.comp >= 0 ? S.pcb.data.comps[h.comp].des : null, where, true); }
+    // Priorität: innerhalb einer Bauteilfläche (sichtbare Seite) immer nur das Bauteil
+    const cd = compAt('pcb', q, true); if (cd) { setNet(null); return select(cd, where); }
+    if (h && h.kind === 'pad') { setNet(h.net >= 0 ? { n: h.net } : null, 'pcb'); return select(null, where, true); }
     if (h) { setNet({ n: h.net }, 'pcb'); return select(null, where, true); }
     setNet(null); return select(compAt('pcb', q), where); }
   setNet(null); select(null, where);

@@ -168,3 +168,7 @@ html.ist-dunkel .wbeak .bl { color:#AEAEB2; }
 /* Ladeschirm wie DB mini */
 .einzeile .netz { font-size:15px; } .einzeile .netz b { color:var(--pink); }
 .einzeile.zeile2 { display:flex; align-items:baseline; gap:12px; } .zeile2 .links { flex:1; min-width:0; overflow:hidden; text-overflow:ellipsis; white-space:nowrap; } .zeile2 .bk { margin-right:0; flex:none; }
+.lade3d { position:absolute; inset:0; display:flex; flex-direction:column; align-items:center; justify-content:center; gap:12px; background:rgba(255,255,255,.92); z-index:5; transition:opacity .25s; font-size:14px; font-weight:600; color:var(--grau,#4B4748); }
+.lade3d.fertig { opacity:0; pointer-events:none; }
+.lade3d .lb { width:min(320px,70%); height:6px; border-radius:3px; background:rgba(216,3,115,.15); overflow:hidden; }
+.lade3d .lb i { display:block; height:100%; width:0; background:#D80373; border-radius:3px; }

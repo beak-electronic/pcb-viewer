@@ -59,6 +59,10 @@ export const Drei = { _R: () => R,
     this.stop(); if (R) { R.renderer.dispose(); box.innerHTML = ''; }
     const d = pcb.data, C = cfg3d(d.board), T = thickness(d.board);
     const renderer = new THREE.WebGLRenderer({ antialias: true, alpha: false, logarithmicDepthBuffer: false }); MAXT = Math.min(8192, renderer.capabilities.maxTextureSize || 4096); renderer.setPixelRatio(Math.min(2, devicePixelRatio)); box.appendChild(renderer.domElement);
+    const prog = document.createElement('div'); prog.className = 'lade3d'; prog.innerHTML = '<div class="lt">Lade 3D-Ansicht …</div><div class="lb"><i></i></div>'; box.appendChild(prog);
+    const setP = (txt, f) => { prog.querySelector('.lt').textContent = txt; prog.querySelector('i').style.width = Math.round(Math.max(0, Math.min(1, f)) * 100) + '%'; };
+    const yieldUI = () => new Promise(r => setTimeout(r, 0));
+    setP('Erzeuge Platine …', 0.03); await yieldUI();
     const scene = new THREE.Scene(); scene.background = new THREE.Color(0xffffff);
     const cam = new THREE.PerspectiveCamera(35, 1, 1, 1e6); const ctl = new OrbitControls(cam, renderer.domElement); ctl.enableDamping = true; ctl.screenSpacePanning = true;
     scene.add(new THREE.HemisphereLight(0xffffff, 0x444444, 1.6)); const dl = new THREE.DirectionalLight(0xffffff, 1.6); dl.position.set(1, -1.5, 3); scene.add(dl); const dl2 = new THREE.DirectionalLight(0xffffff, 0.6); dl2.position.set(-1, 1, -3); scene.add(dl2);
@@ -93,7 +97,7 @@ export const Drei = { _R: () => R,
       m.position.z = side === 'oben' ? T + 0.6 : -0.6; return m; };
     const faces = new THREE.Group(); scene.add(faces);
     const buildFaces = async () => { const [a, b] = await Promise.all([mkFace('oben'), mkFace('unten')]); faces.clear(); faces.add(a, b); };
-    await buildFaces();
+    setP('Erzeuge Oberflächen …', 0.08); await yieldUI(); await buildFaces();
     // Bauteile
     const compMeshes = new Map(); const has = new Set();
     const MM = 39.3700787; const stepJobs = [];
@@ -113,7 +117,10 @@ export const Drei = { _R: () => R,
       outer.userData.comp = b.comp; outer.traverse(n => { n.userData.comp = b.comp; }); world.add(outer);
       const ms = []; outer.traverse(n => { if (n.isMesh) ms.push(n); }); compMeshes.set(b.comp, (compMeshes.get(b.comp) || []).concat(ms)); };
     const stepFail = [];
-    await Promise.all(stepJobs.map(j => placeStep(j).catch(e => { console.warn(e); stepFail.push(d.comps[j[0].comp]?.des); has.delete(j[0].comp); })));
+    if (stepJobs.length) { setP('Lade 3D-Engine …', 0.15); await yieldUI(); try { await occt(); } catch (e) { console.warn(e); } }
+    for (let k = 0; k < stepJobs.length; k++) { const j = stepJobs[k]; setP(`Lade 3D-Modelle … ${k + 1} von ${stepJobs.length}`, 0.2 + 0.8 * k / stepJobs.length); await yieldUI();
+      try { await placeStep(j); } catch (e) { console.warn(e); stepFail.push(d.comps[j[0].comp]?.des); has.delete(j[0].comp); } }
+    prog.classList.add('fertig'); setTimeout(() => prog.remove(), 250);
     pcb.stepInfo = { ok: stepJobs.length - stepFail.length, fail: stepFail };
     // keine Ersatz-Quader: nur Bauteile mit echtem 3D-Modell (STEP oder Body aus der Datei)
     const sel = new THREE.Group(); scene.add(sel);
