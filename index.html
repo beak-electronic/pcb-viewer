@@ -36,7 +36,7 @@
   <label class="tab pink oeffnen"><svg viewBox="0 0 24 24" width="20" height="20" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true" style="margin-right:6px;flex:none"><path d="M3 19V6a1 1 0 0 1 1-1h5l2 2h7a1 1 0 0 1 1 1v2"/><path d="M3 19l3-8h16l-3 8z"/></svg>Öffnen<input id="datei" type="file" multiple accept=".SchDoc,.PcbDoc,.PrjPcb,.zip,.schdoc,.pcbdoc,.prjpcb"></label>
   <div id="projekt" class="projekt"></div>
   <nav id="tabs">
-    <div class="sucheWrap" id="sucheWrap" hidden><input id="suche" list="desListe" placeholder="Bauteil suchen" autocomplete="off" spellcheck="false"><datalist id="desListe"></datalist></div>
+    <form class="sucheWrap" id="sucheWrap" role="search" action="#" hidden><input id="suche" type="search" enterkeyhint="search" inputmode="search" list="desListe" placeholder="Bauteil suchen" autocomplete="off" autocapitalize="characters" spellcheck="false"><datalist id="desListe"></datalist></form>
     <div class="menuWrap" id="ansichtTabs" hidden><button class="tab" id="anzeigeKnopf" aria-haspopup="true">Anzeige ▾</button>
       <div class="menu karte" id="anzeigeMenu" hidden><button data-a="sch">Schaltplan</button><button data-a="pcb">Leiterplatte</button><button data-a="beide" class="an">Beides</button></div></div>    <button id="thema" class="tab icon" title="Anzeige: System / Hell / Dunkel" aria-label="Anzeige">◐</button>
   </nav>

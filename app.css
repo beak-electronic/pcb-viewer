@@ -172,3 +172,9 @@ html.ist-dunkel .wbeak .bl { color:#AEAEB2; }
 .lade3d.fertig { opacity:0; pointer-events:none; }
 .lade3d .lb { width:min(320px,70%); height:6px; border-radius:3px; background:rgba(216,3,115,.15); overflow:hidden; }
 .lade3d .lb i { display:block; height:100%; width:0; background:#D80373; border-radius:3px; }
+form.sucheWrap { margin:0; } .sucheWrap input[type=search] { -webkit-appearance:none; appearance:none; } .sucheWrap input[type=search]::-webkit-search-cancel-button { cursor:pointer; }
+.pane > .leiste { position:relative; flex-wrap:nowrap; }
+.leiste .werkzeuge { display:flex; align-items:center; gap:8px; flex:none; }
+.leiste.eng .werkzeuge { display:none; position:absolute; right:8px; top:calc(100% + 4px); z-index:50; flex-direction:column; align-items:stretch; padding:8px; background:var(--feld); border:1px solid var(--linie); border-radius:14px; box-shadow:0 8px 24px rgba(0,0,0,.18); }
+.leiste.eng.offen .werkzeuge { display:flex; }
+.leiste.eng .werkzeuge > .umschalter { align-self:stretch; justify-content:center; }

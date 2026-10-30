@@ -30,7 +30,7 @@ class Pan {
   }
   rect() { return this.svg.getBoundingClientRect(); }
   k() { const r = this.rect(); return r.width ? this.vb.w / r.width : 1; }
-  apply() { this.prevW = this.rect().width; const v = this.vb; this.svg.setAttribute('viewBox', `${v.x} ${v.y} ${v.w} ${v.h}`); }
+  apply() { this.prevW = this.rect().width; if (this.raf) return; this.raf = requestAnimationFrame(() => { this.raf = 0; const v = this.vb; this.svg.setAttribute('viewBox', `${v.x} ${v.y} ${v.w} ${v.h}`); }); }
   toData(cx, cy) { const r = this.rect(), k = this.k(); return { x: this.vb.x + (cx - r.left) * k, y: this.vb.y + (cy - r.top) * k }; }
   zoomAt(cx, cy, f) { const p = this.toData(cx, cy); const k = this.k() * f; if (k <= 0) return; const r = this.rect();
     this.vb.w = r.width * k; this.vb.h = r.height * k; this.vb.x = p.x - (cx - r.left) * k; this.vb.y = p.y - (cy - r.top) * k; this.apply(); }
@@ -160,7 +160,7 @@ function renderSch(recs) {
   if (all.x1 > all.x2) Object.assign(all, { x1: 0, y1: -800, x2: 1100, y2: 0 });
   let grid = ''; if (all.x1 < all.x2) { const gx1 = Math.floor((all.x1 - 60) / 100) * 100, gx2 = Math.ceil((all.x2 + 60) / 100) * 100, gy1 = Math.floor((all.y1 - 60) / 100) * 100, gy2 = Math.ceil((all.y2 + 60) / 100) * 100;
     for (let g = gx1; g <= gx2; g += 100) grid += `M${g},${gy1 - 400}V${gy2 + 400}`; for (let g = gy1; g <= gy2; g += 100) grid += `M${gx1 - 400},${g}H${gx2 + 400}`; }
-  return { svg: fixW(`<path class="raster" d="${grid}" fill="none" stroke="#DCDCDC" stroke-width="1" vector-effect="non-scaling-stroke"/><g class="unter">${under.join('')}</g><g class="drueber">${over.join('')}</g>${compSvg}<g id="sch-hl"></g>`), bb: all, comps, groups, keyToGroup };
+  return { svg: fixW(`<g class="unter">${under.join('')}</g><g class="drueber">${over.join('')}</g>${compSvg}<g id="sch-hl"></g>`), bb: all, comps, groups, keyToGroup };
 }
 
 // ---------------- Leiterplatte 2D ----------------
@@ -285,7 +285,6 @@ function compBoxes(d) {
   d.pads.forEach(p => e(p.comp, p.x, p.y, Math.max(p.sx, p.sy) / 2));
   d.tracks.forEach(t => { if (t.layer === 33 || t.layer === 34) { e(t.comp, t.x1, t.y1); e(t.comp, t.x2, t.y2); } });
   d.arcs.forEach(a => { if (a.layer === 33 || a.layer === 34) e(a.comp, a.cx, a.cy, a.r); });
-  d.bodies.forEach(b => b.pts.forEach(p => e(b.comp, p.x, p.y)));
   d.comps.forEach((c, i) => { if (!bx[i]) e(i, c.x, c.y, 20); const b = bx[i]; b.x1 -= 6; b.y1 -= 6; b.x2 += 6; b.y2 += 6; });
   return bx;
 }
@@ -301,7 +300,7 @@ function renderPcb() {
     if (l === 900) { if (d.outline.length) s += `<g data-l="900"${S.hidden.has(900) ? ' display="none"' : ''}><path d="${outlinePath(d.outline)}" fill="#000" stroke="${layerColor(900)}" stroke-width="6" vector-effect="non-scaling-stroke"/></g>`; continue; }
     if (l === 902) { if ((d.cutouts || []).length) s += `<g data-l="900"${S.hidden.has(900) ? ' display="none"' : ''}><path d="${cutPath(d)}" fill="#0A0A0A" stroke="${layerColor(900)}" stroke-width="1.5" vector-effect="non-scaling-stroke"/></g>`; continue; }
     if (!L.has(l)) continue; const c = layerColor(l), hole = l === 901;
-    s += `<g data-l="${l}" fill="${hole ? '#101010' : c}" stroke="${c}" stroke-linecap="round" opacity="${hole ? 1 : l === 37 || l === 38 ? 0.45 : 0.85}"${S.hidden.has(l) ? ' display="none"' : ''}>${L.get(l).join('')}</g>`;
+    s += `<g data-l="${l}" fill="${hole ? '#101010' : c}" stroke="${c}" stroke-linecap="round" fill-opacity="${hole ? 1 : l === 37 || l === 38 ? 0.45 : 0.85}" stroke-opacity="${hole ? 1 : l === 37 || l === 38 ? 0.45 : 0.85}"${S.hidden.has(l) ? ' display="none"' : ''}>${L.get(l).join('')}</g>`;
   }
   s += '<g id="pcb-hl"></g>';
   $('#svg-pcb').innerHTML = `<g id="pcbwelt"${S.side === 'unten' ? ' transform="scale(-1 1)"' : ''}>${s}</g>`;
@@ -401,15 +400,15 @@ function highlight(pan, from) {
   const L = ':is(line,polyline,polygon,rect,circle,ellipse,path,text)';
   void L; st.textContent = css;
   // Abdunkeln als Ganzes: Overlay über die fertige Zeichnung, Auswahl als Kopie obenauf
-  const BIG = 'x="-1e6" y="-1e6" width="2e6" height="2e6"', shl = document.getElementById('sch-hl'), phl = document.getElementById('pcb-hl');
-  if (shl) { shl.innerHTML = ''; if (des || S.net) { shl.insertAdjacentHTML('beforeend', `<rect ${BIG} fill="#fff" opacity=".7" pointer-events="none"/>`);
+  const ob = b => b ? `x="${b.x1 - 2000}" y="${b.y1 - 2000}" width="${b.x2 - b.x1 + 4000}" height="${b.y2 - b.y1 + 4000}"` : 'x="-1e5" y="-1e5" width="2e5" height="2e5"', BIG = ob(S.pcb && S.pcb.bb), BIGS = ob(curSheet() && curSheet().r.bb), shl = document.getElementById('sch-hl'), phl = document.getElementById('pcb-hl');
+  if (shl) { shl.innerHTML = ''; if (des || S.net) { shl.insertAdjacentHTML('beforeend', `<rect ${BIGS} fill="#fff" opacity=".7" pointer-events="none"/>`);
     const top = document.createElementNS('http://www.w3.org/2000/svg', 'g'); top.setAttribute('pointer-events', 'none');
     if (des) document.querySelectorAll(`#svg-sch g[data-des="${CSS.escape(des)}"]`).forEach(g => { if (!shl.contains(g)) top.appendChild(g.cloneNode(true)); });
     (S.net?.sheets.get(S.sheet) || []).forEach(g => document.querySelectorAll(`#svg-sch [data-g="${g}"]`).forEach(n => { if (!shl.contains(n)) top.appendChild(n.cloneNode(true)); }));
     shl.appendChild(top); } }
   if (phl) { phl.innerHTML = ''; if ((des || S.net) && keepP.length) { phl.insertAdjacentHTML('beforeend', `<rect ${BIG} fill="#000" opacity=".7" pointer-events="none"/>`);
     const sel = keepP.join(','); document.querySelectorAll('#svg-pcb g[data-l]').forEach(g => { if (g.getAttribute('display') === 'none') return; const ms = g.querySelectorAll(sel); if (!ms.length) return;
-      const c = g.cloneNode(false); c.setAttribute('opacity', '1'); c.setAttribute('pointer-events', 'none'); ms.forEach(m => c.appendChild(m.cloneNode(true))); phl.appendChild(c); }); const h = document.querySelector('#svg-pcb g[data-l="901"]'); if (h && h.getAttribute('display') !== 'none') { const c = h.cloneNode(true); c.setAttribute('pointer-events', 'none'); phl.appendChild(c); } }
+      const c = g.cloneNode(false); c.setAttribute('fill-opacity', '1'); c.setAttribute('stroke-opacity', '1'); c.setAttribute('pointer-events', 'none'); ms.forEach(m => c.appendChild(m.cloneNode(true))); phl.appendChild(c); }); const h = document.querySelector('#svg-pcb g[data-l="901"]'); if (h && h.getAttribute('display') !== 'none') { const c = h.cloneNode(true); c.setAttribute('pointer-events', 'none'); phl.appendChild(c); } }
     else if (des || S.net) phl.insertAdjacentHTML('beforeend', `<rect ${BIG} fill="#000" opacity=".7" pointer-events="none"/>`); }
 }
 function info() {
@@ -513,7 +512,10 @@ $('#ebenenKnopf').addEventListener('click', () => { $('#ebenen').hidden = !$('#e
 $('#ebenen').addEventListener('change', e => { const l = +e.target.dataset.l; if (e.target.checked) S.hidden.delete(l); else S.hidden.add(l); const g = $(`#svg-pcb g[data-l="${l}"]`); if (g) g.style.display = e.target.checked ? '' : 'none'; if (S.dim === '3d') window.Drei?.layers?.(S.hidden); });
 $('#ebenen').addEventListener('click', e => { if (e.target.id !== 'alleEb' && e.target.id !== 'kuEb') return; const keep = e.target.id === 'kuEb' ? new Set([1, 32, 74, 900, 901, ...Array.from({ length: 46 }, (_, i) => i + 2).filter(i => i <= 31 || (i >= 39 && i <= 54))]) : null;
   S.hidden = new Set(); if (keep) S.pcb.layers.forEach((_, l) => { if (!keep.has(l)) S.hidden.add(l); }); buildLayerPanel(); renderPcb(); if (S.dim === '3d') window.Drei?.layers?.(S.hidden); });
-$('#suche').addEventListener('change', e => { const v = e.target.value.trim(); if (!v) return select(null); const all = [...$('#desListe').options].map(o => o.value); const m = all.find(d => d.toLowerCase() === v.toLowerCase()); if (m) select(m, 'suche'); });
+const sucheAus = () => { const e = { target: $('#suche') }; const v = e.target.value.trim(); if (!v) return select(null); const all = [...$('#desListe').options].map(o => o.value); let m = all.find(d => d.toLowerCase() === v.toLowerCase()); if (!m) { const c = all.filter(d => d.toLowerCase().startsWith(v.toLowerCase())); if (c.length === 1) m = c[0]; } if (m) { e.target.value = m; select(m, 'suche'); } };
+$('#suche').addEventListener('change', sucheAus);
+$('#sucheWrap').addEventListener('submit', e => { e.preventDefault(); sucheAus(); $('#suche').blur(); });
+$('#suche').addEventListener('keydown', e => { if (e.key === 'Enter') { e.preventDefault(); sucheAus(); } });
 document.addEventListener('keydown', e => { if (e.key === 'Escape') select(null); });
 const TH = ['system', 'light', 'dark'], THN = { system: 'Anzeige: System', light: 'Anzeige: Hell', dark: 'Anzeige: Dunkel' };
 $('#thema').addEventListener('click', () => { const t = TH[(TH.indexOf(window.beakTheme()) + 1) % 3]; window.beakTheme(t); $('#thema').title = THN[t]; });
@@ -531,3 +533,28 @@ $('#thema').title = THN[window.beakTheme()];
 if ('launchQueue' in window) window.launchQueue.setConsumer(async p => { if (p.files?.length) load(await Promise.all(p.files.map(h => h.getFile()))); });
 if ('serviceWorker' in navigator && location.protocol !== 'file:') navigator.serviceWorker.register('sw.js').catch(() => {});
 window.PCBV = { S, select, load };
+
+// Responsive Werkzeugleisten: Hamburger, wenn die Knöpfe nicht in eine Zeile passen
+(() => {
+  const HB = '<svg viewBox="0 0 24 24" width="20" height="20" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" aria-hidden="true"><path d="M4 7h16M4 12h16M4 17h16"/></svg>';
+  document.querySelectorAll('.pane > .leiste').forEach(l => {
+    const f = l.querySelector('.fuell'); if (!f) return;
+    const w = document.createElement('div'); w.className = 'werkzeuge';
+    while (f.nextSibling) w.appendChild(f.nextSibling);
+    const hb = document.createElement('button'); hb.className = 'klein icon hamburger'; hb.title = 'Menü'; hb.setAttribute('aria-label', 'Menü'); hb.setAttribute('aria-expanded', 'false'); hb.innerHTML = HB; hb.hidden = true;
+    l.append(hb, w);
+    let voll = 0;
+    const zu = () => { l.classList.remove('offen'); hb.setAttribute('aria-expanded', 'false'); hb.classList.remove('an'); };
+    hb.addEventListener('click', e => { e.stopPropagation(); const o = !l.classList.contains('offen'); l.classList.toggle('offen', o); hb.classList.toggle('an', o); hb.setAttribute('aria-expanded', String(o)); });
+    document.addEventListener('pointerdown', e => { if (l.classList.contains('offen') && !w.contains(e.target) && !hb.contains(e.target)) zu(); });
+    document.addEventListener('keydown', e => { if (e.key === 'Escape') zu(); });
+    const pruefe = () => {
+      if (!l.classList.contains('eng')) voll = w.scrollWidth;
+      const t = l.querySelector('.titelWrap'), cs = getComputedStyle(l);
+      const platz = l.clientWidth - parseFloat(cs.paddingLeft) - parseFloat(cs.paddingRight) - (t ? t.offsetWidth : 0) - 16;
+      const eng = voll > platz;
+      if (eng !== l.classList.contains('eng')) { l.classList.toggle('eng', eng); hb.hidden = !eng; if (!eng) zu(); }
+    };
+    new ResizeObserver(pruefe).observe(l); pruefe();
+  });
+})();
