@@ -378,6 +378,7 @@ function pcbIdx(des) { return S.pcb ? S.pcb.data.comps.findIndex(c => c.des === 
 function pcbSelBox(des) { const i = pcbIdx(des); if (i < 0) return null; const b = S.pcb.boxes[i]; return S.side === 'unten' ? { x1: -b.x2, x2: -b.x1, y1: b.y1, y2: b.y2 } : b; }
 schPan.selBox = () => S.sel && schBox(S.sel); pcbPan.selBox = () => S.sel && pcbSelBox(S.sel);
 function select(des, from, keepNet) {
+  if (des && des === S.sel && !S.net && (from === 'pcb' || from === 'sch' || from === '3d')) des = null; // erneut antippen = abwählen
   if (!keepNet) S.net = null;
   S.sel = des;
   if (S.net && from !== 'sch' && !S.net.sheets.has(S.sheet) && S.net.sheets.size) { S.sheet = [...S.net.sheets.keys()][0]; showSheet(true); }
@@ -388,17 +389,17 @@ function select(des, from, keepNet) {
 }
 function highlight(pan, from) {
   const des = S.sel, st = document.getElementById('hlstyle') || document.head.appendChild(Object.assign(document.createElement('style'), { id: 'hlstyle' }));
-  const P = '#D80373'; let css = '';
+  const P = '#D80373', PP = '#FF6EB8', dk = document.documentElement.classList.contains('ist-dunkel'); let css = '';
   if (des) {
     const e = CSS.escape(des);
     css += `#svg-sch g[data-des="${e}"] .s{stroke:${P}!important} #svg-sch g[data-des="${e}"] .f{fill:${P}!important} #svg-sch g[data-des="${e}"] .s.f{fill:#FBE6F0!important}`;
     const sb = schBox(des); if (sb && pan && from !== 'sch') schPan.show(sb);
-    const i = pcbIdx(des); for (const j of pcbIdxAll(des)) css += `#svg-pcb [data-c="${j}"].s{stroke:${P}!important} #svg-pcb [data-c="${j}"].f{fill:${P}!important} #svg-pcb g[data-l]:has([data-c="${j}"]){opacity:1}`; if (i >= 0) {
+    const i = pcbIdx(des); for (const j of pcbIdxAll(des)) css += `#svg-pcb [data-c="${j}"].s{stroke:${PP}!important} #svg-pcb [data-c="${j}"].f{fill:${PP}!important} #svg-pcb g[data-l]:has([data-c="${j}"]){opacity:1}`; if (i >= 0) {
       if (pan && from !== 'pcb' && from !== '3d') pcbPan.show(pcbSelBox(des)); }
   }
   if (S.net) {
     const set = S.net.sheets.get(S.sheet); if (set) set.forEach(g => { css += `#svg-sch [data-g="${g}"].s,#svg-sch [data-g="${g}"] .s,#svg-sch [data-g="${g}"] line,#svg-sch [data-g="${g}"] circle{stroke:${P}!important} #svg-sch [data-g="${g}"].f,#svg-sch [data-g="${g}"] text,#svg-sch circle[data-g="${g}"]{fill:${P}!important}`; });
-    if (S.net.n >= 0) css += `#svg-pcb [data-n="${S.net.n}"].s{stroke:${P}!important} #svg-pcb [data-n="${S.net.n}"].f{fill:${P}!important} #svg-pcb g[data-l]:has([data-n="${S.net.n}"]){opacity:1}`;
+    if (S.net.n >= 0) css += `#svg-pcb [data-n="${S.net.n}"].s{stroke:${PP}!important} #svg-pcb [data-n="${S.net.n}"].f{fill:${PP}!important} #svg-pcb g[data-l]:has([data-n="${S.net.n}"]){opacity:1}`;
     if (pan && !des) { if (S.net.from !== 'sch') { const b = netSchBox(); if (b) schPan.show(b); } if (S.net.from !== 'pcb') { const b = netPcbBox(); if (b) pcbPan.show(b); } }
   }
   // Abdunkeln: alles außer Auswahl auf 30 %
@@ -409,15 +410,15 @@ function highlight(pan, from) {
   void L; st.textContent = css;
   // Abdunkeln als Ganzes: Overlay über die fertige Zeichnung, Auswahl als Kopie obenauf
   const ob = b => b ? `x="${b.x1 - 2000}" y="${b.y1 - 2000}" width="${b.x2 - b.x1 + 4000}" height="${b.y2 - b.y1 + 4000}"` : 'x="-1e5" y="-1e5" width="2e5" height="2e5"', BIG = ob(S.pcb && S.pcb.bb), BIGS = ob(curSheet() && curSheet().r.bb), shl = document.getElementById('sch-hl'), phl = document.getElementById('pcb-hl');
-  if (shl) { shl.innerHTML = ''; if (des || S.net) { shl.insertAdjacentHTML('beforeend', `<rect ${BIGS} fill="#fff" opacity=".7" pointer-events="none"/>`);
+  if (shl) { shl.innerHTML = ''; if (des || S.net) { shl.insertAdjacentHTML('beforeend', `<rect ${BIGS} fill="${dk ? '#8E8E93' : '#fff'}" opacity=".7" pointer-events="none"/>`);
     const top = document.createElementNS('http://www.w3.org/2000/svg', 'g'); top.setAttribute('pointer-events', 'none');
     if (des) document.querySelectorAll(`#svg-sch g[data-des="${CSS.escape(des)}"]`).forEach(g => { if (!shl.contains(g)) top.appendChild(g.cloneNode(true)); });
     (S.net?.sheets.get(S.sheet) || []).forEach(g => document.querySelectorAll(`#svg-sch [data-g="${g}"]`).forEach(n => { if (!shl.contains(n)) top.appendChild(n.cloneNode(true)); }));
     shl.appendChild(top); } }
-  if (phl) { phl.innerHTML = ''; if ((des || S.net) && keepP.length) { phl.insertAdjacentHTML('beforeend', `<rect ${BIG} fill="#000" opacity=".7" pointer-events="none"/>`);
+  if (phl) { phl.innerHTML = ''; if ((des || S.net) && keepP.length) { phl.insertAdjacentHTML('beforeend', `<rect ${BIG} fill="${dk ? '#101010' : '#fff'}" opacity=".7" pointer-events="none"/>`);
     const sel = keepP.join(','); document.querySelectorAll('#svg-pcb g[data-l]').forEach(g => { if (g.getAttribute('display') === 'none') return; const ms = g.querySelectorAll(sel); if (!ms.length) return;
       const c = g.cloneNode(false); c.setAttribute('fill-opacity', '1'); c.setAttribute('stroke-opacity', '1'); c.setAttribute('pointer-events', 'none'); ms.forEach(m => c.appendChild(m.cloneNode(true))); phl.appendChild(c); }); const h = document.querySelector('#svg-pcb g[data-l="901"]'); if (h && h.getAttribute('display') !== 'none') { const c = h.cloneNode(true); c.setAttribute('pointer-events', 'none'); phl.appendChild(c); } }
-    else if (des || S.net) phl.insertAdjacentHTML('beforeend', `<rect ${BIG} fill="#000" opacity=".7" pointer-events="none"/>`); }
+    else if (des || S.net) phl.insertAdjacentHTML('beforeend', `<rect ${BIG} fill="${dk ? '#101010' : '#fff'}" opacity=".7" pointer-events="none"/>`); }
 }
 function info() {
   const des = S.sel, el = $('#info');
@@ -527,9 +528,6 @@ $('#suche').addEventListener('change', sucheAus);
 $('#sucheWrap').addEventListener('submit', e => { e.preventDefault(); sucheAus(); $('#suche').blur(); });
 $('#suche').addEventListener('keydown', e => { if (e.key === 'Enter') { e.preventDefault(); sucheAus(); } });
 document.addEventListener('keydown', e => { if (e.key === 'Escape') select(null); });
-const TH = ['system', 'light', 'dark'], THN = { system: 'Anzeige: System', light: 'Anzeige: Hell', dark: 'Anzeige: Dunkel' };
-$('#thema').addEventListener('click', () => { const t = document.documentElement.classList.contains('ist-dunkel') ? 'light' : 'dark'; window.beakTheme(t); $('#thema').title = THN[t]; });
-$('#thema').title = THN[window.beakTheme()];
 // Trenner
 (() => { const tr = $('#trenner'), panes = $('#panes'); let v = +localStorage.getItem('beak-pcbv-split') || 50; const setv = x => { v = Math.min(85, Math.max(15, x)); panes.style.setProperty('--split', v + '%'); };
   setv(v); let drag = false, x0 = 0, y0 = 0, moved = false; const quer = () => getComputedStyle(panes).flexDirection === 'column';
@@ -595,3 +593,6 @@ $('#wversion').textContent = 'PCB Viewer · Version ' + (self.PCBV_VERSION || ''
   const P = [['#ebenen', '#ebenenKnopf'], ['#anzeigeMenu', '#anzeigeKnopf'], ['#blattMenu', '#schTitel'], ['#platMenu', '#pcbTitel']];
   P.forEach(([m, k]) => { const me = $(m), kn = $(k); if (!me || !kn) return; const set = () => { kn.classList.toggle('popAn', !me.hidden); kn.setAttribute('aria-expanded', String(!me.hidden)); }; new MutationObserver(set).observe(me, { attributes: true, attributeFilter: ['hidden'] }); set(); });
 })();
+
+// Systemanzeige live: Hervorhebung + 3D-Hintergrund nachziehen
+window.matchMedia('(prefers-color-scheme: dark)').addEventListener('change', () => setTimeout(() => { try { highlight(false); } catch (e) {} window.Drei?.theme?.(); }, 0));

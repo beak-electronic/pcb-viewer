@@ -79,7 +79,7 @@ export const Drei = { _R: () => R,
     const setP = (txt, f) => { prog.querySelector('.lt').textContent = txt; prog.querySelector('i').style.width = Math.round(Math.max(0, Math.min(1, f)) * 100) + '%'; };
     const yieldUI = () => new Promise(r => setTimeout(r, 0));
     setP('Erzeuge Platine …', 0.03); await yieldUI();
-    const scene = new THREE.Scene(); scene.background = new THREE.Color(0xffffff);
+    const scene = new THREE.Scene(); scene.background = new THREE.Color(document.documentElement.classList.contains('ist-dunkel') ? 0x000000 : 0xffffff);
     const cam = new THREE.PerspectiveCamera(35, 1, 1, 1e6); const ctl = new OrbitControls(cam, renderer.domElement); ctl.enableDamping = true; ctl.screenSpacePanning = true;
     scene.add(new THREE.HemisphereLight(0xffffff, 0x444444, 1.6)); const dl = new THREE.DirectionalLight(0xffffff, 1.6); dl.position.set(1, -1.5, 3); scene.add(dl); const dl2 = new THREE.DirectionalLight(0xffffff, 0.6); dl2.position.set(-1, 1, -3); scene.add(dl2);
     let pts = outlinePts(d.outline); if (pts.length < 3) { const b = H.outlinePath ? null : null; void b; const xs = d.pads.map(p => p.x), ys = d.pads.map(p => p.y); const x1 = Math.min(...xs) - 50, x2 = Math.max(...xs) + 50, y1 = Math.min(...ys) - 50, y2 = Math.max(...ys) + 50; pts = [{ x: x1, y: y1 }, { x: x2, y: y1 }, { x: x2, y: y2 }, { x: x1, y: y2 }]; }
@@ -160,6 +160,7 @@ export const Drei = { _R: () => R,
   setSide(side, force) { if (!R) return; if (R.side === side && !force) return; R.side = side; const D = R.size * 2.4; R.cam.up.set(0, 1, 0);
     if (side === 'unten') R.cam.position.set(0, -D * 0.25, -D); else R.cam.position.set(0, -D * 0.25, D + R.T); R.ctl.target.set(0, 0, R.T / 2); R.cam.updateProjectionMatrix(); R.ctl.update(); R.dirty = true; },
   fit() { if (R) this.setSide(R.side, true); },
+  theme() { if (!R || !R.scene) return; R.scene.background = new THREE.Color(document.documentElement.classList.contains('ist-dunkel') ? 0x000000 : 0xffffff); R.dirty = true; },
   select(des) { if (!R) return; const d = R.pcb.data; R.selDes = des;
     R.compMeshes.forEach((ms, i) => { const on = d.comps[i].des === des; ms.forEach(m => { if (!m.userData.m0) m.userData.m0 = m.material; m.material = on ? PINK : m.userData.m0; }); }); R.dirty = true; },
   async layers(hidden) { if (!R) return; R.H.hidden = hidden; R.world.visible = !hidden.has(950); R.sel.visible = R.world.visible; await R.buildFaces(); R.dirty = true; },

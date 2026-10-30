@@ -63,7 +63,8 @@ img.dunkel, .marke img.dunkel { display:none; }
 .flaeche svg { position:absolute; inset:0; width:100%; height:100%; display:block; cursor:grab; }
 .flaeche svg.zieht { cursor:grabbing; }
 .flaeche.papier { background:#fff; }
-.flaeche.platine { background:#101010; }
+.flaeche.platine { background:#fff; }
+html.ist-dunkel .flaeche.platine { background:#101010; }
 .leer { position:absolute; inset:0; display:flex; align-items:center; justify-content:center; color:#999; font-weight:600; pointer-events:none; }
 .ebenen { position:absolute; top:8px; right:8px; max-height:calc(100% - 16px); overflow:auto; padding:8px 10px; font-size:14px; box-shadow:0 10px 40px rgba(0,0,0,.25); z-index:3; }
 .ebenen label { display:flex; align-items:center; gap:8px; padding:4px 0; white-space:nowrap; cursor:pointer; }
@@ -83,7 +84,7 @@ svg .hl-box { fill:rgba(216,3,115,.10); stroke:#D80373; stroke-dasharray:4 3; ve
 #svg-pcb .hl-box { fill:rgba(216,3,115,.18); stroke:#FF4FA8; }
 .hit { fill:transparent; stroke:none; cursor:pointer; }
 @media (max-width: 900px) {
-  .marke .logo { height:22px; } .projekt { display:none; } .sucheWrap input { width:130px; }
+  .marke .logo { height:22px; } .projekt { display:block; flex:0 1 auto; } .sucheWrap input { width:130px; }
   .tab { padding:0 10px; font-size:15px; }
 }
 /* Dunkel – automatisch oder per Umschalter */
@@ -98,7 +99,7 @@ html.ist-dunkel .umschalter button { background:#1C1C1E; color:var(--pink); }
 html.ist-dunkel .umschalter button.an { background:var(--pink); color:#fff; }
 html.ist-dunkel .meldung.fehler { color:#FF6B81; }
 html.ist-dunkel img.hell { display:none !important; } html.ist-dunkel img.dunkel, html.ist-dunkel .marke img.dunkel { display:block; }
-html.ist-dunkel .flaeche.papier { background:#fff; }
+html.ist-dunkel .flaeche.papier { background:#8E8E93; }
 
 html.ist-dunkel .projekt { color:#fff; }
 button.icon { display:inline-flex; align-items:center; justify-content:center; padding:0 8px; }
@@ -191,3 +192,8 @@ label.tab, label.tab *, label.wbtn, label.wbtn *, button, button *, .wbtn, .tite
 button:disabled, button:disabled * { cursor:default; }
 .lade3d.strom { inset:auto 12px 12px 12px; padding:10px 14px; border-radius:12px; background:rgba(255,255,255,.9); box-shadow:0 4px 16px rgba(0,0,0,.15); pointer-events:none; gap:8px; }
 html.ist-dunkel .lade3d.strom { background:rgba(28,28,30,.9); color:#D0CDCE; }
+
+/* 7.2: iOS-Blur oben weg – Lösung wie DB mini: deckende Kopf-/Statusleiste, nirgends backdrop-filter */
+*, *::before, *::after { -webkit-backdrop-filter:none !important; backdrop-filter:none !important; }
+header#kopf { background:#fff !important; transform:none; }
+html.ist-dunkel header#kopf { background:#1C1C1E !important; }
