@@ -232,7 +232,7 @@ function pcbLayers(d, opt = {}) { // -> Map layer -> [svg strings]
   // Texte: Bezeichner/Kommentar je nach Bauteil-Einstellung
   const seen = {}; for (const t of d.texts) { if (!t.text) continue; let show = true;
     if (t.comp >= 0 && d.comps[t.comp]) { const c = d.comps[t.comp]; seen[t.comp] = (seen[t.comp] || 0) + 1;
-      if (t.text === c.des) show = c.nameOn; else if (seen[t.comp] === 2) show = c.commentOn; }
+      if (t.isDesignator) show = c.nameOn; else if (t.isComment) show = c.commentOn; else if (t.text === c.des) show = c.nameOn; else if (seen[t.comp] === 2 && t.isComment === undefined) show = c.commentOn; }
     if (show) add(t.layer, textEl(t, dc(t.comp))); }
   for (const v of d.vias) { add(74, `<circle class="f"${dc(-1, v.net)} cx="${f2(v.x)}" cy="${f2(-v.y)}" r="${f2(v.d / 2)}"/>`); add(901, `<circle cx="${f2(v.x)}" cy="${f2(-v.y)}" r="${f2(v.hole / 2)}"/>`); }
   for (const p of d.pads) { add(p.layer, padEl(p, p.sx, p.sy, p.shape, dc(p.comp, p.net)));

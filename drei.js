@@ -38,7 +38,7 @@ function sideSvg(pcb, side, C, H, bb, hidden) {
   const g = l => (L.get(l) || []).join('');
   const mo = top ? C.maskTopO : C.maskBotO, mc = top ? C.maskTop : C.maskBot;
   const w = bb.x2 - bb.x1, h = bb.y2 - bb.y1;
-  let s = `<svg xmlns="http://www.w3.org/2000/svg" viewBox="${bb.x1} ${bb.y1} ${w} ${h}" width="2048" height="${Math.round(2048 * h / w)}">`;
+  let s = `<svg xmlns="http://www.w3.org/2000/svg" viewBox="${bb.x1} ${bb.y1} ${w} ${h}" width="${TW(w, h)[0]}" height="${TW(w, h)[1]}">`;
   s += `<defs><mask id="m"><rect x="${bb.x1}" y="${bb.y1}" width="${w}" height="${h}" fill="#fff"/><g fill="#000" stroke="#000">${g(mask)}</g></mask><clipPath id="c"><path d="${mi}"/></clipPath></defs><g clip-path="url(#c)">`;
   if (!hidden.has(cu[0])) s += `<g fill="${hex(C.copper)}" stroke="${hex(C.copper)}" stroke-linecap="round">${cu.map(g).join('')}${hidden.has(74) ? '' : g(74)}</g>`;
   if (!hidden.has(mask) || true) s += `<rect x="${bb.x1}" y="${bb.y1}" width="${w}" height="${h}" fill="${hex(mc)}" fill-opacity="${mo}" mask="url(#m)"/>`;
@@ -46,9 +46,11 @@ function sideSvg(pcb, side, C, H, bb, hidden) {
   s += `<g fill="#111">${g(901)}</g></g></svg>`;
   return s;
 }
+// Texturauflösung nach Größe (ca. 1 mil/px, max. 8192 bzw. GPU-Limit)
+let MAXT = 4096; const TW = (w, h) => { const s = Math.min(MAXT / Math.max(w, h), Math.max(2048 / Math.max(w, h), 1)); return [Math.round(w * s), Math.round(h * s)]; };
 function tex(svg) { return new Promise((res, rej) => { const img = new Image(); const url = URL.createObjectURL(new Blob([svg], { type: 'image/svg+xml' }));
   img.onload = () => { const c = document.createElement('canvas'); c.width = img.width; c.height = img.height; c.getContext('2d').drawImage(img, 0, 0); URL.revokeObjectURL(url);
-    const t = new THREE.CanvasTexture(c); t.colorSpace = THREE.SRGBColorSpace; t.anisotropy = 8; res(t); }; img.onerror = rej; img.src = url; }); }
+    const t = new THREE.CanvasTexture(c); t.colorSpace = THREE.SRGBColorSpace; t.anisotropy = 16; t.generateMipmaps = true; t.minFilter = THREE.LinearMipmapLinearFilter; res(t); }; img.onerror = rej; img.src = url; }); }
 function shapeFrom(pts, ox, oy) { const s = new THREE.Shape(); pts.forEach((p, i) => (i ? s.lineTo(p.x - ox, p.y - oy) : s.moveTo(p.x - ox, p.y - oy))); return s; }
 function outlinePts(ol) { const a = []; ol.forEach(v => { a.push({ x: v.x, y: v.y }); if (v.k === 1 && v.r > 0) { const sw = ((v.ea - v.sa) % 360 + 360) % 360 || 360; const n = Math.ceil(sw / 5); for (let i = 1; i < n; i++) { const t = (v.sa + sw * i / n) * Math.PI / 180; a.push({ x: v.cx + v.r * Math.cos(t), y: v.cy + v.r * Math.sin(t) }); } } }); return a; }
 export const Drei = {
@@ -56,7 +58,7 @@ export const Drei = {
     if (R && R.pcb === pcb) { R.H = H; this.setSide(H.side); R.running = true; R.loop(); return; }
     this.stop(); if (R) { R.renderer.dispose(); box.innerHTML = ''; }
     const d = pcb.data, C = cfg3d(d.board), T = thickness(d.board);
-    const renderer = new THREE.WebGLRenderer({ antialias: true, alpha: false }); renderer.setPixelRatio(Math.min(2, devicePixelRatio)); box.appendChild(renderer.domElement);
+    const renderer = new THREE.WebGLRenderer({ antialias: true, alpha: false, logarithmicDepthBuffer: false }); MAXT = Math.min(8192, renderer.capabilities.maxTextureSize || 4096); renderer.setPixelRatio(Math.min(2, devicePixelRatio)); box.appendChild(renderer.domElement);
     const scene = new THREE.Scene(); scene.background = new THREE.Color(0xffffff);
     const cam = new THREE.PerspectiveCamera(35, 1, 1, 1e6); const ctl = new OrbitControls(cam, renderer.domElement); ctl.enableDamping = true; ctl.screenSpacePanning = true;
     scene.add(new THREE.HemisphereLight(0xffffff, 0x444444, 1.6)); const dl = new THREE.DirectionalLight(0xffffff, 1.6); dl.position.set(1, -1.5, 3); scene.add(dl); const dl2 = new THREE.DirectionalLight(0xffffff, 0.6); dl2.position.set(-1, 1, -3); scene.add(dl2);
@@ -72,7 +74,7 @@ export const Drei = {
     const bbS = { x1: bb0.x1, x2: bb0.x2, y1: -bb0.y2, y2: -bb0.y1 }; const w = bb0.x2 - bb0.x1, h = bb0.y2 - bb0.y1;
     const faceGeo = () => { const g = new THREE.ShapeGeometry(shapeFrom(pts, ox, oy)); const uv = g.attributes.uv, pos = g.attributes.position; for (let i = 0; i < uv.count; i++) uv.setXY(i, (pos.getX(i) + ox - bb0.x1) / w, (pos.getY(i) + oy - bb0.y1) / h); return g; };
     const mkFace = async (side) => { const t = await tex(sideSvg(pcb, side, C, H, bbS, H.hidden)); const m = new THREE.Mesh(faceGeo(), new THREE.MeshStandardMaterial({ map: t, transparent: true, roughness: 0.55, metalness: 0.1, side: THREE.DoubleSide, polygonOffset: true, polygonOffsetFactor: -2 }));
-      m.position.z = side === 'oben' ? T + 0.3 : -0.3; return m; };
+      m.position.z = side === 'oben' ? T + 0.6 : -0.6; return m; };
     const faces = new THREE.Group(); scene.add(faces);
     const buildFaces = async () => { const [a, b] = await Promise.all([mkFace('oben'), mkFace('unten')]); faces.clear(); faces.add(a, b); };
     await buildFaces();
@@ -104,7 +106,10 @@ export const Drei = {
     R = { world, pcb, H, renderer, scene, cam, ctl, box, compMeshes, sel, T, size: Math.max(w, h), buildFaces, running: true, side: 'oben' };
     const resize = () => { const r = box.getBoundingClientRect(); if (!r.width || !r.height) return; renderer.setSize(r.width, r.height, false); cam.aspect = r.width / r.height; cam.updateProjectionMatrix(); };
     R.ro = new ResizeObserver(resize); R.ro.observe(box); resize();
-    R.loop = () => { if (!R.running) return; ctl.update(); renderer.render(scene, cam); requestAnimationFrame(R.loop); };
+    const span = Math.hypot(w, h); R.loop = () => { if (!R.running) return; ctl.update();
+      // Tiefenbereich an Abstand + Platinengröße anpassen (sonst Z-Fighting/Moiré bei großen Nutzen)
+      const dist = cam.position.distanceTo(ctl.target), nr = Math.max(0.5, (dist - span) * 0.5, dist / 200), fr = dist + span * 2; if (Math.abs(cam.near - nr) > nr * 0.05 || Math.abs(cam.far - fr) > fr * 0.05) { cam.near = nr; cam.far = fr; cam.updateProjectionMatrix(); }
+      renderer.render(scene, cam); requestAnimationFrame(R.loop); };
     // Klick = Auswahl
     let down = null; renderer.domElement.addEventListener('pointerdown', e => (down = { x: e.clientX, y: e.clientY }));
     renderer.domElement.addEventListener('pointerup', e => { if (!down || Math.hypot(e.clientX - down.x, e.clientY - down.y) > 5) return; const r = renderer.domElement.getBoundingClientRect();
