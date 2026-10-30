@@ -110,7 +110,7 @@ const Altium = (() => {
     regions.forEach(r => { if (r.net < 0 && r.poly >= 0 && polys[r.poly] && polys[r.poly].NET !== undefined && polys[r.poly].NET !== '') { const n = +polys[r.poly].NET; if (n >= 0 && n < 65535) r.net = n; } });
     const bodies = regionRecs('ComponentBodies6', false).map(b => b);
     const models = textRecs(c.get('Models/Data') || new Uint8Array(0)).map((m, k) => ({ id: m.ID, name: m.NAME, checksum: m.CHECKSUM, rotx: +m.ROTX || 0, roty: +m.ROTY || 0, rotz: +m.ROTZ || 0, dz: (+m.DZ || 0) / I, raw: c.get('Models/' + k) }));
-    const embedded = (c.get('EmbeddedBoards6/Data') ? textRecs(get('EmbeddedBoards6')) : []).map(e => ({ doc: e.DOCUMENTPATH || '', x1: parseFloat(e.X1) || 0, y1: parseFloat(e.Y1) || 0, x2: parseFloat(e.X2) || 0, y2: parseFloat(e.Y2) || 0, rows: +e.ROWCOUNT || 1, cols: +e.COLCOUNT || 1, rs: parseFloat(e.ROWSPACING) || 0, cs: parseFloat(e.COLSPACING) || 0 }));
+    const embedded = (c.get('EmbeddedBoards6/Data') ? textRecs(get('EmbeddedBoards6')) : []).map(e => ({ doc: e.DOCUMENTPATH || '', x1: parseFloat(e.X1) || 0, y1: parseFloat(e.Y1) || 0, x2: parseFloat(e.X2) || 0, y2: parseFloat(e.Y2) || 0, rows: +e.ROWCOUNT || 1, rot: parseFloat(e.ROTATION) || 0, mirror: e.MIRROR === 'TRUE', cols: +e.COLCOUNT || 1, rs: parseFloat(e.ROWSPACING) || 0, cs: parseFloat(e.COLSPACING) || 0 }));
     return { embedded, models, bodies, board, outline, layerNames, comps, nets, polys, tracks, arcs, fills, vias, pads, texts, regions };
   }
   return { cfb, parseSch, parsePcb, props };

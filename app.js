@@ -241,7 +241,7 @@ function pcbLayers(d, opt = {}) { // -> Map layer -> [svg strings]
     if (p.layer === 1) add(35, padEl(p, p.sx, p.sy, p.shape, dc(p.comp, p.net))); if (p.layer === 32) add(36, padEl(p, p.sx, p.sy, p.shape, dc(p.comp, p.net)));
     if (p.hole > 0) add(901, `<circle cx="${f2(p.x)}" cy="${f2(-p.y)}" r="${f2(p.hole / 2)}"/>`); }
   // Nutzen: eingebettete Platinen als Rahmen mit Dateiname (Originaldatei ist nicht Teil des Projekts)
-  for (const e of d.embedded || []) { const w = (e.x2 - e.x1 - (e.cols - 1) * e.cs), h = (e.y2 - e.y1 - (e.rows - 1) * e.rs);
+  for (const e of (d.embedded || []).filter(e => !e.resolved)) { const w = (e.x2 - e.x1 - (e.cols - 1) * e.cs), h = (e.y2 - e.y1 - (e.rows - 1) * e.rs);
     for (let r = 0; r < e.rows; r++) for (let k = 0; k < e.cols; k++) { const x = e.x1 + k * e.cs, y = e.y1 + r * e.rs;
       add(57, `<rect class="s" x="${f2(x)}" y="${f2(-(y + h))}" width="${f2(w)}" height="${f2(h)}" fill="none" stroke-width="6" stroke-dasharray="30 20"/><text class="f" x="${f2(x + w / 2)}" y="${f2(-(y + h / 2))}" font-size="${f2(Math.min(h, w) * 0.09)}" text-anchor="middle" dominant-baseline="middle" font-family="Arial">${esc(e.doc.replace(/\.PcbDoc$/i, ''))}</text>`); } }
   return L;
@@ -250,6 +250,33 @@ function pcbBox(d) {
   const b = { x1: 1e9, y1: 1e9, x2: -1e9, y2: -1e9 }, e = (x, y) => { b.x1 = Math.min(b.x1, x); b.x2 = Math.max(b.x2, x); b.y1 = Math.min(b.y1, -y); b.y2 = Math.max(b.y2, -y); };
   d.outline.forEach(v => e(v.x, v.y)); if (b.x1 > b.x2) { d.pads.forEach(p => e(p.x, p.y)); d.tracks.forEach(t => { e(t.x1, t.y1); e(t.x2, t.y2); }); }
   return b;
+}
+// Nutzen: eingebettete Platinen auflösen (fehlende Datei -> normale Projekt-Platine) und Inhalt je Position kopieren
+function expandPanels(list) {
+  const normal = list.filter(p => !(p.data.embedded || []).length), base = n => noExt(String(n).split(/[\\/]/).pop()).toLowerCase();
+  const sim = (a, b) => { const A = new Set(a.split(/[^a-z0-9]+/)), B = b.split(/[^a-z0-9]+/); return B.filter(w => w && A.has(w)).length; };
+  for (const P of list) { const d = P.data; if (!(d.embedded || []).length) continue;
+    for (const e of d.embedded) {
+      let ch = normal.find(p => base(p.name) === base(e.doc)); if (!ch && normal.length) ch = normal.slice().sort((x, y) => sim(base(e.doc), base(y.name)) - sim(base(e.doc), base(x.name)))[0];
+      if (!ch) continue; e.resolved = ch.name; const c = ch.data, ox = parseFloat(c.board.ORIGINX) || 0, oy = parseFloat(c.board.ORIGINY) || 0, rot = e.rot || 0, mir = !!e.mirror;
+      const netMap = c.nets.map(n => { let i = d.nets.indexOf(n); if (i < 0) { d.nets.push(n); i = d.nets.length - 1; } return i; }), nm = n => n >= 0 ? netMap[n] : -1;
+      d.models.push(...c.models.filter(m => !d.models.some(x => x.id === m.id)));
+      for (let r = 0; r < e.rows; r++) for (let k = 0; k < e.cols; k++) {
+        const tx = e.x1 + k * e.cs, ty = e.y1 + r * e.rs, ca = Math.cos(rot * Math.PI / 180), sa = Math.sin(rot * Math.PI / 180);
+        const T = (x, y) => { let u = x - ox, v = y - oy; if (mir) u = -u; return [tx + u * ca - v * sa, ty + u * sa + v * ca]; }, R = a => (mir ? 180 - a : a) + rot;
+        const coff = d.comps.length; const cm = i => i >= 0 ? i + coff : -1;
+        c.comps.forEach(q => { const [x, y] = T(q.x, q.y); d.comps.push({ ...q, x, y, rot: R(q.rot || 0), i: d.comps.length }); });
+        c.tracks.forEach(t => { const [x1, y1] = T(t.x1, t.y1), [x2, y2] = T(t.x2, t.y2); d.tracks.push({ ...t, x1, y1, x2, y2, comp: cm(t.comp), net: nm(t.net) }); });
+        c.arcs.forEach(q => { const [cx, cy] = T(q.cx, q.cy); let sa2 = q.sa, ea2 = q.ea; if (mir) [sa2, ea2] = [180 - q.ea, 180 - q.sa]; d.arcs.push({ ...q, cx, cy, sa: sa2 + rot, ea: ea2 + rot, comp: cm(q.comp), net: nm(q.net) }); });
+        c.fills.forEach(f => { const [x1, y1] = T(f.x1, f.y1), [x2, y2] = T(f.x2, f.y2); d.fills.push({ ...f, x1, y1, x2, y2, rot: (f.rot || 0) + rot, comp: cm(f.comp), net: nm(f.net) }); });
+        const PT = p => { const [x, y] = T(p.x, p.y); return { ...p, x, y }; };
+        c.regions.forEach(q => d.regions.push({ ...q, pts: q.pts.map(PT), holes: q.holes.map(h => h.map(PT)), comp: cm(q.comp), net: nm(q.net), poly: -1 }));
+        c.pads.forEach(p => { const [x, y] = T(p.x, p.y); d.pads.push({ ...p, x, y, rot: R(p.rot || 0), comp: cm(p.comp), net: nm(p.net) }); });
+        c.vias.forEach(v => { const [x, y] = T(v.x, v.y); d.vias.push({ ...v, x, y, net: nm(v.net) }); });
+        c.texts.forEach(t => { const [x, y] = T(t.x, t.y); d.texts.push({ ...t, x, y, rot: R(t.rot || 0), comp: cm(t.comp) }); });
+        c.bodies.forEach(b => { const p = { ...b.p }; if (p['MODEL.2D.X'] !== undefined) { const [x, y] = T(parseFloat(p['MODEL.2D.X']), parseFloat(p['MODEL.2D.Y'])); p['MODEL.2D.X'] = x + 'mil'; p['MODEL.2D.Y'] = y + 'mil'; p['MODEL.2D.ROTATION'] = String(R(+(p['MODEL.2D.ROTATION'] || 0))); }
+          d.bodies.push({ ...b, p, pts: b.pts.map(PT), comp: cm(b.comp) }); });
+      } } }
 }
 function compBoxes(d) {
   const bx = d.comps.map(() => null), e = (i, x, y, r = 0) => { if (i < 0 || !bx[i] && !(bx[i] = { x1: 1e9, y1: 1e9, x2: -1e9, y2: -1e9 })) return; const b = bx[i]; b.x1 = Math.min(b.x1, x - r); b.x2 = Math.max(b.x2, x + r); b.y1 = Math.min(b.y1, -y - r); b.y2 = Math.max(b.y2, -y + r); };
@@ -334,6 +361,7 @@ function netPcbBox() { if (!S.net || S.net.n < 0 || !S.pcb) return null; const d
   d.pads.forEach(p => { if (p.net === n) e(p.x, p.y); }); d.tracks.forEach(t => { if (t.net === n) { e(t.x1, t.y1); e(t.x2, t.y2); } }); if (b.x1 > b.x2) return null;
   return S.side === 'unten' ? { x1: -b.x2, x2: -b.x1, y1: b.y1, y2: b.y2 } : b; }
 function schBox(des) { const c = curSheet()?.r.comps[des]; if (!c) return null; const b = { x1: 1e9, y1: 1e9, x2: -1e9, y2: -1e9 }; c.parts.forEach(p => { b.x1 = Math.min(b.x1, p.bb.x1); b.y1 = Math.min(b.y1, p.bb.y1); b.x2 = Math.max(b.x2, p.bb.x2); b.y2 = Math.max(b.y2, p.bb.y2); }); return b; }
+function pcbIdxAll(des) { return S.pcb ? S.pcb.data.comps.map((c, i) => c.des === des ? i : -1).filter(i => i >= 0) : []; }
 function pcbIdx(des) { return S.pcb ? S.pcb.data.comps.findIndex(c => c.des === des) : -1; }
 function pcbSelBox(des) { const i = pcbIdx(des); if (i < 0) return null; const b = S.pcb.boxes[i]; return S.side === 'unten' ? { x1: -b.x2, x2: -b.x1, y1: b.y1, y2: b.y2 } : b; }
 schPan.selBox = () => S.sel && schBox(S.sel); pcbPan.selBox = () => S.sel && pcbSelBox(S.sel);
@@ -353,22 +381,31 @@ function highlight(pan, from) {
     const e = CSS.escape(des);
     css += `#svg-sch g[data-des="${e}"] .s{stroke:${P}!important} #svg-sch g[data-des="${e}"] .f{fill:${P}!important} #svg-sch g[data-des="${e}"] .s.f{fill:#FBE6F0!important}`;
     const sb = schBox(des); if (sb && pan && from !== 'sch') schPan.show(sb);
-    const i = pcbIdx(des); if (i >= 0) { css += `#svg-pcb [data-c="${i}"].s{stroke:${P}!important} #svg-pcb [data-c="${i}"].f{fill:${P}!important} #svg-pcb g[data-l]:has([data-c="${i}"]){opacity:1}`;
+    const i = pcbIdx(des); for (const j of pcbIdxAll(des)) css += `#svg-pcb [data-c="${j}"].s{stroke:${P}!important} #svg-pcb [data-c="${j}"].f{fill:${P}!important} #svg-pcb g[data-l]:has([data-c="${j}"]){opacity:1}`; if (i >= 0) {
       if (pan && from !== 'pcb' && from !== '3d') pcbPan.show(pcbSelBox(des)); }
   }
   if (S.net) {
-    const set = S.net.sheets.get(S.sheet); if (set) set.forEach(g => { css += `#svg-sch [data-g="${g}"].s,#svg-sch [data-g="${g}"] .s,#svg-sch [data-g="${g}"] line,#svg-sch [data-g="${g}"] circle{stroke:${P}!important} #svg-sch polyline[data-g="${g}"]{stroke-width:2.2!important} #svg-sch [data-g="${g}"].f,#svg-sch [data-g="${g}"] text,#svg-sch circle[data-g="${g}"]{fill:${P}!important}`; });
+    const set = S.net.sheets.get(S.sheet); if (set) set.forEach(g => { css += `#svg-sch [data-g="${g}"].s,#svg-sch [data-g="${g}"] .s,#svg-sch [data-g="${g}"] line,#svg-sch [data-g="${g}"] circle{stroke:${P}!important} #svg-sch [data-g="${g}"].f,#svg-sch [data-g="${g}"] text,#svg-sch circle[data-g="${g}"]{fill:${P}!important}`; });
     if (S.net.n >= 0) css += `#svg-pcb [data-n="${S.net.n}"].s{stroke:${P}!important} #svg-pcb [data-n="${S.net.n}"].f{fill:${P}!important} #svg-pcb g[data-l]:has([data-n="${S.net.n}"]){opacity:1}`;
     if (pan && !des) { if (S.net.from !== 'sch') { const b = netSchBox(); if (b) schPan.show(b); } if (S.net.from !== 'pcb') { const b = netPcbBox(); if (b) pcbPan.show(b); } }
   }
   // Abdunkeln: alles außer Auswahl auf 30 %
   const keepS = [], keepP = [];
-  if (des) { const e = CSS.escape(des); keepS.push(`g[data-des="${e}"] *`); const i = pcbIdx(des); if (i >= 0) keepP.push(`[data-c="${i}"]`); }
+  if (des) { const e = CSS.escape(des); keepS.push(`g[data-des="${e}"] *`); pcbIdxAll(des).forEach(j => keepP.push(`[data-c="${j}"]`)); }
   if (S.net) { (S.net.sheets.get(S.sheet) || []).forEach(g => keepS.push(`[data-g="${g}"]`, `[data-g="${g}"] *`)); if (S.net.n >= 0) keepP.push(`[data-n="${S.net.n}"]`); }
   const L = ':is(line,polyline,polygon,rect,circle,ellipse,path,text)';
-  if (des || S.net) { css += `#svg-sch ${L}{opacity:.3} #svg-pcb ${L}{opacity:.3}`;
-    if (keepS.length) css += `#svg-sch :is(${keepS.join(',')}){opacity:1!important}`; if (keepP.length) css += `#svg-pcb :is(${keepP.join(',')}){opacity:1!important}`; }
-  st.textContent = css;
+  void L; st.textContent = css;
+  // Abdunkeln als Ganzes: Overlay über die fertige Zeichnung, Auswahl als Kopie obenauf
+  const BIG = 'x="-1e6" y="-1e6" width="2e6" height="2e6"', shl = document.getElementById('sch-hl'), phl = document.getElementById('pcb-hl');
+  if (shl) { shl.innerHTML = ''; if (des || S.net) { shl.insertAdjacentHTML('beforeend', `<rect ${BIG} fill="#fff" opacity=".7" pointer-events="none"/>`);
+    const top = document.createElementNS('http://www.w3.org/2000/svg', 'g'); top.setAttribute('pointer-events', 'none');
+    if (des) document.querySelectorAll(`#svg-sch g[data-des="${CSS.escape(des)}"]`).forEach(g => { if (!shl.contains(g)) top.appendChild(g.cloneNode(true)); });
+    (S.net?.sheets.get(S.sheet) || []).forEach(g => document.querySelectorAll(`#svg-sch [data-g="${g}"]`).forEach(n => { if (!shl.contains(n)) top.appendChild(n.cloneNode(true)); }));
+    shl.appendChild(top); } }
+  if (phl) { phl.innerHTML = ''; if ((des || S.net) && keepP.length) { phl.insertAdjacentHTML('beforeend', `<rect ${BIG} fill="#000" opacity=".7" pointer-events="none"/>`);
+    const sel = keepP.join(','); document.querySelectorAll('#svg-pcb g[data-l]').forEach(g => { if (g.getAttribute('display') === 'none') return; const ms = g.querySelectorAll(sel); if (!ms.length) return;
+      const c = g.cloneNode(false); c.setAttribute('opacity', '1'); c.setAttribute('pointer-events', 'none'); ms.forEach(m => c.appendChild(m.cloneNode(true))); phl.appendChild(c); }); const h = document.querySelector('#svg-pcb g[data-l="901"]'); if (h && h.getAttribute('display') !== 'none') { const c = h.cloneNode(true); c.setAttribute('pointer-events', 'none'); phl.appendChild(c); } }
+    else if (des || S.net) phl.insertAdjacentHTML('beforeend', `<rect ${BIG} fill="#000" opacity=".7" pointer-events="none"/>`); }
 }
 function info() {
   const des = S.sel, el = $('#info');
@@ -408,7 +445,8 @@ async function load(files) {
       const order = n => { const i = docs.findIndex(d => d.toLowerCase().endsWith(n.toLowerCase())); return i < 0 ? 999 : i; }; sch.sort((a, b) => order(a.name) - order(b.name)); pcbList.sort((a, b) => order(a.name) - order(b.name));
       S.prj = prj.name.replace(/\.prjpcb$/i, ''); } else S.prj = (pcb || sch[0]).name.replace(/\.\w+$/, '');
     S.sheets = sch.map(f => ({ name: f.name, r: renderSch(Altium.parseSch(f.buf)) }));
-    S.pcbs = pcbList.map(f => { const data = Altium.parsePcb(f.buf); return { name: f.name, data, layers: pcbLayers(data), boxes: compBoxes(data) }; }); S.pcb = S.pcbs[0] || null;
+    const parsed = pcbList.map(f => ({ name: f.name, data: Altium.parsePcb(f.buf) })); expandPanels(parsed);
+    S.pcbs = parsed.map(({ name, data }) => ({ name, data, layers: pcbLayers(data), boxes: compBoxes(data) })); S.pcb = S.pcbs[0] || null;
     S.sheet = 0; S.sel = null; msg.textContent = '';
     show();
   } catch (e) { console.error(e); msg.className = 'meldung fehler'; msg.textContent = 'Fehler: ' + e.message; if ($('#v-start').hidden) alert(e.message); }
