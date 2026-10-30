@@ -565,3 +565,23 @@ window.PCBV = { S, select, load };
 
 $('#wversion').textContent = 'PCB Viewer · Version ' + (self.PCBV_VERSION || '');
 (() => { const mq = matchMedia('(max-width: 900px), (orientation: portrait)'), set = () => $('#trenner').setAttribute('aria-orientation', mq.matches ? 'horizontal' : 'vertical'); set(); mq.addEventListener('change', set); })();
+// Popover schließen bei Klick/Tipp außerhalb (inkl. Zeichenflächen) oder Esc – der schließende Klick wird verbraucht
+(() => {
+  const offen = () => {
+    const l = [];
+    if (!$('#ebenen').hidden) l.push({ el: $('#ebenen'), zone: [$('#ebenen'), $('#ebenenKnopf')], zu: () => { $('#ebenen').hidden = true; } });
+    $$('.menu').forEach(m => { if (!m.hidden) l.push({ el: m, zone: [m.closest('.menuWrap') || m.parentElement], zu: () => { m.hidden = true; } }); });
+    $$('.leiste.offen').forEach(le => { const w = le.querySelector('.werkzeuge'), hb = le.querySelector('.hamburger'); l.push({ el: w, zone: [w, hb], zu: () => { le.classList.remove('offen'); hb.classList.remove('an'); hb.setAttribute('aria-expanded', 'false'); } }); });
+    return l; };
+  let schlucken = false;
+  const eat = e => { if (schlucken) { e.stopPropagation(); e.preventDefault(); if (e.type === 'click') schlucken = false; } };
+  document.addEventListener('pointerdown', e => {
+    const l = offen(); if (!l.length) return;
+    const drin = l.filter(p => p.zone.some(z => z && z.contains(e.target)));
+    const weg = l.filter(p => !drin.includes(p)); if (!weg.length) return;
+    weg.forEach(p => p.zu());
+    if (!drin.length) { schlucken = true; e.stopPropagation(); e.preventDefault(); setTimeout(() => { schlucken = false; }, 600); }
+  }, true);
+  ['pointerup', 'mouseup', 'click', 'touchend'].forEach(t => document.addEventListener(t, eat, true));
+  document.addEventListener('keydown', e => { if (e.key === 'Escape') offen().forEach(p => p.zu()); });
+})();
