@@ -2,7 +2,7 @@
 [hidden] { display:none !important; }
 :root { --pink:#D80373; --pink2:#B0025E; --grau:#4B4748; --fix:rgba(0,0,0,.9); --linie:#D9D7D8; --back:#F4F4F4; --feld:#FFFFFF; --soft:#FBE6F0; color-scheme:light dark; }
 * { box-sizing:border-box; -webkit-tap-highlight-color:transparent; }
-html,body { margin:0; height:100%; }
+html,body { margin:0; height:100%; } body { height:100vh; height:100dvh; }
 body { font:16px/1.35 -apple-system, "SF Pro Text", "Segoe UI", Roboto, Arial, sans-serif; color:var(--fix); background:var(--back); -webkit-text-size-adjust:100%; display:flex; flex-direction:column; }
 header#kopf { flex:none; display:flex; align-items:center; gap:16px; background:#fff; color:var(--fix); border-bottom:1px solid rgba(216,221,230,.75);
   padding:calc(env(safe-area-inset-top) + 8px) calc(env(safe-area-inset-right) + 14px) 8px calc(env(safe-area-inset-left) + 14px); min-height:60px; }
@@ -18,7 +18,7 @@ nav#tabs { display:flex; gap:6px; flex:1; justify-content:flex-end; flex-wrap:wr
 .oeffnen { position:relative; overflow:hidden; }
 .oeffnen input { position:absolute; inset:0; opacity:0; cursor:pointer; }
 .sucheWrap input { width:190px; min-height:44px; }
-main { flex:1; min-height:0; padding:12px; padding-bottom:calc(env(safe-area-inset-bottom) + 12px); }
+main { flex:1; min-height:0; padding:12px calc(12px + env(safe-area-inset-right)) max(12px, env(safe-area-inset-bottom)) calc(12px + env(safe-area-inset-left)); }
 .karte { background:var(--feld); border:1px solid var(--linie); border-radius:14px; padding:14px; }
 h2 { margin:0 0 12px; font-size:22px; color:var(--grau); } h3 { margin:0; font-size:17px; color:var(--grau); }
 button { font:inherit; min-height:44px; border-radius:10px; border:1px solid #BDB9BA; background:#fff; color:var(--fix); padding:0 16px; font-weight:600; cursor:pointer; }

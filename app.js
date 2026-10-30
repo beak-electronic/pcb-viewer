@@ -527,12 +527,11 @@ $('#thema').addEventListener('click', () => { const t = TH[(TH.indexOf(window.be
 $('#thema').title = THN[window.beakTheme()];
 // Trenner
 (() => { const tr = $('#trenner'), panes = $('#panes'); let v = +localStorage.getItem('beak-pcbv-split') || 50; const setv = x => { v = Math.min(85, Math.max(15, x)); panes.style.setProperty('--split', v + '%'); };
-  setv(v); let drag = false;
-  tr.addEventListener('pointerdown', e => { drag = true; tr.setPointerCapture(e.pointerId); tr.classList.add('zieht'); });
-  tr.addEventListener('pointermove', e => { if (!drag) return; const r = panes.getBoundingClientRect(); setv((e.clientX - r.left) / r.width * 100); });
-  const end = () => { if (!drag) return; drag = false; tr.classList.remove('zieht'); try { localStorage.setItem('beak-pcbv-split', String(v)); } catch (_) {} };
+  setv(v); let drag = false, x0 = 0, moved = false;
+  tr.addEventListener('pointerdown', e => { drag = true; moved = false; x0 = e.clientX; tr.setPointerCapture(e.pointerId); tr.classList.add('zieht'); });
+  tr.addEventListener('pointermove', e => { if (!drag) return; if (!moved && Math.abs(e.clientX - x0) < 4) return; moved = true; const r = panes.getBoundingClientRect(); setv((e.clientX - r.left) / r.width * 100); });
+  const end = e => { if (!drag) return; drag = false; tr.classList.remove('zieht'); if (e && e.type === 'pointerup' && !moved) setv(50); try { localStorage.setItem('beak-pcbv-split', String(v)); } catch (_) {} };
   tr.addEventListener('pointerup', end); tr.addEventListener('pointercancel', end);
-  tr.addEventListener('dblclick', () => { setv(50); end(); });
 })();
 // Dateien über „Öffnen mit“ (installierte App, File Handling API)
 if ('launchQueue' in window) window.launchQueue.setConsumer(async p => { if (p.files?.length) load(await Promise.all(p.files.map(h => h.getFile()))); });
