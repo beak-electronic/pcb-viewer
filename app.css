@@ -166,11 +166,5 @@ html.ist-dunkel .wbtn { background:#2C2C2E; color:var(--fix); border-color:#4848
 html.ist-dunkel .wbtn.primary { background:var(--pink); border-color:var(--pink); color:#fff; }
 html.ist-dunkel .wbeak .bl { color:#AEAEB2; }
 /* Ladeschirm wie DB mini */
-#ladeSchirm { position:fixed; inset:0; z-index:1000; background:#fff; display:flex; flex-direction:column; align-items:center; justify-content:center; gap:28px; transition:opacity .15s ease; }
-#ladeSchirm img { width:min(320px,70vw); height:auto; }
-#ladeSchirm.aus { opacity:0; pointer-events:none; }
-.ladeSpin { width:22px; height:22px; border-radius:50%; border:2.5px solid rgba(128,128,128,.25); border-top-color:rgba(128,128,128,.8); opacity:0; animation:ladeDreh .9s linear infinite, ladeEin .3s ease .6s forwards; }
-@keyframes ladeDreh { to { transform:rotate(360deg); } } @keyframes ladeEin { to { opacity:1; } }
-html.ist-dunkel #ladeSchirm { background:#1C1C1E; }
 .einzeile .netz { font-size:15px; } .einzeile .netz b { color:var(--pink); }
 .einzeile.zeile2 { display:flex; align-items:baseline; gap:12px; } .zeile2 .links { flex:1; min-width:0; overflow:hidden; text-overflow:ellipsis; white-space:nowrap; } .zeile2 .bk { margin-right:0; flex:none; }

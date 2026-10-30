@@ -179,6 +179,7 @@ function padEl(p, sx, sy, shape, dc, grow = 0) {
   const rr = shape === 1 ? Math.min(sx, sy) / 2 : shape === 9 ? Math.min(sx, sy) * (p.cr ?? p.bcr ?? 50) / 200 : 0;
   return `<rect class="f"${dc} x="${f2(x - sx / 2)}" y="${f2(y - sy / 2)}" width="${f2(sx)}" height="${f2(sy)}"${rr ? ` rx="${f2(rr)}"` : ''}${tr}/>`;
 }
+function cutPath(d) { return (d.cutouts || []).map(pts => 'M' + pts.map(p => f2(p.x) + ',' + f2(-p.y)).join('L') + 'Z').join(''); }
 function outlinePath(ol) {
   if (!ol.length) return ''; let d = '';
   ol.forEach((v, i) => { d += (i ? 'L' : 'M') + f2(v.x) + ',' + f2(-v.y);
@@ -272,6 +273,7 @@ function expandPanels(list) {
         const PT = p => { const [x, y] = T(p.x, p.y); return { ...p, x, y }; };
         c.regions.forEach(q => d.regions.push({ ...q, pts: q.pts.map(PT), holes: q.holes.map(h => h.map(PT)), comp: cm(q.comp), net: nm(q.net), poly: -1 }));
         c.pads.forEach(p => { const [x, y] = T(p.x, p.y); d.pads.push({ ...p, x, y, rot: R(p.rot || 0), comp: cm(p.comp), net: nm(p.net) }); });
+        (c.cutouts || []).forEach(pts => (d.cutouts = d.cutouts || []).push(pts.map(PT)));
         c.vias.forEach(v => { const [x, y] = T(v.x, v.y); d.vias.push({ ...v, x, y, net: nm(v.net) }); });
         c.texts.forEach(t => { const [x, y] = T(t.x, t.y); d.texts.push({ ...t, x, y, rot: R(t.rot || 0), comp: cm(t.comp) }); });
         c.bodies.forEach(b => { const p = { ...b.p }; if (p['MODEL.2D.X'] !== undefined) { const [x, y] = T(parseFloat(p['MODEL.2D.X']), parseFloat(p['MODEL.2D.Y'])); p['MODEL.2D.X'] = x + 'mil'; p['MODEL.2D.Y'] = y + 'mil'; p['MODEL.2D.ROTATION'] = String(R(+(p['MODEL.2D.ROTATION'] || 0))); }
@@ -291,12 +293,13 @@ function drawOrder(side) {
   const mids = []; for (let i = 2; i <= 31; i++) mids.push(i); for (let i = 39; i <= 54; i++) mids.push(i);
   const mech = []; for (let i = 57; i <= 72; i++) mech.push(i);
   const top = [1, 35, 37, 33], bot = [32, 36, 38, 34];
-  return side === 'unten' ? [900, ...top, ...mids, ...bot, ...mech, 55, 56, 73, 74, 901] : [900, ...bot, ...mids, ...top, ...mech, 55, 56, 73, 74, 901];
+  return side === 'unten' ? [900, ...top, ...mids, ...bot, ...mech, 55, 56, 73, 74, 901, 902] : [900, ...bot, ...mids, ...top, ...mech, 55, 56, 73, 74, 901, 902];
 }
 function renderPcb() {
   const d = S.pcb.data, L = S.pcb.layers; let s = '';
   for (const l of drawOrder(S.side)) {
     if (l === 900) { if (d.outline.length) s += `<g data-l="900"${S.hidden.has(900) ? ' display="none"' : ''}><path d="${outlinePath(d.outline)}" fill="#000" stroke="${layerColor(900)}" stroke-width="6" vector-effect="non-scaling-stroke"/></g>`; continue; }
+    if (l === 902) { if ((d.cutouts || []).length) s += `<g data-l="900"${S.hidden.has(900) ? ' display="none"' : ''}><path d="${cutPath(d)}" fill="#0A0A0A" stroke="${layerColor(900)}" stroke-width="1.5" vector-effect="non-scaling-stroke"/></g>`; continue; }
     if (!L.has(l)) continue; const c = layerColor(l), hole = l === 901;
     s += `<g data-l="${l}" fill="${hole ? '#101010' : c}" stroke="${c}" stroke-linecap="round" opacity="${hole ? 1 : l === 37 || l === 38 ? 0.45 : 0.85}"${S.hidden.has(l) ? ' display="none"' : ''}>${L.get(l).join('')}</g>`;
   }
@@ -483,7 +486,6 @@ function set2d() { S.dim = '2d'; $('#drei').hidden = true; $('#svg-pcb').style.v
 // ---------------- Bedienung ----------------
 ['#datei', '#datei2'].forEach(s => $(s).addEventListener('change', e => { if (e.target.files.length) load([...e.target.files]); e.target.value = ''; }));
 const abl = $('#ablage');
-{ const l = $('#ladeSchirm'); const aus = () => { if (!l || l.classList.contains('aus')) return; l.classList.add('aus'); setTimeout(() => l.remove(), 200); }; if (document.readyState === 'complete') setTimeout(aus, 150); else addEventListener('load', () => setTimeout(aus, 150)); }
 document.addEventListener('dragover', e => { e.preventDefault(); abl.classList.add('drueber'); });
 document.addEventListener('dragleave', e => { if (!e.relatedTarget) abl.classList.remove('drueber'); });
 document.addEventListener('drop', e => { e.preventDefault(); abl.classList.remove('drueber'); if (e.dataTransfer.files.length) load([...e.dataTransfer.files]); });
