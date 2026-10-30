@@ -38,16 +38,22 @@ class Pan {
   fit() { const r = this.rect(), b = this.bb; if (!b || !r.width || !r.height) return; const m = 0.04;
     const k = Math.max((b.x2 - b.x1) * (1 + 2 * m) / r.width, (b.y2 - b.y1) * (1 + 2 * m) / r.height) || 1;
     this.vb = { w: r.width * k, h: r.height * k }; this.vb.x = (b.x1 + b.x2) / 2 - this.vb.w / 2; this.vb.y = (b.y1 + b.y2) / 2 - this.vb.h / 2; this.apply(); }
+  ensure(b) { // nur verschieben, wenn nicht vollständig sichtbar – minimal, mit Rand
+    const v = this.vb, mx = Math.min(v.w * 0.06, Math.max(0, (v.w - (b.x2 - b.x1)) / 2)), my = Math.min(v.h * 0.06, Math.max(0, (v.h - (b.y2 - b.y1)) / 2));
+    let dx = 0, dy = 0;
+    if (b.x1 < v.x) dx = b.x1 - mx - v.x; else if (b.x2 > v.x + v.w) dx = b.x2 + mx - (v.x + v.w);
+    if (b.y1 < v.y) dy = b.y1 - my - v.y; else if (b.y2 > v.y + v.h) dy = b.y2 + my - (v.y + v.h);
+    if (dx || dy) { v.x += dx; v.y += dy; } this.apply(); }
   center(b) { this.vb.x = (b.x1 + b.x2) / 2 - this.vb.w / 2; this.vb.y = (b.y1 + b.y2) / 2 - this.vb.h / 2; this.apply(); }
   show(b) { // Bauteil sichtbar machen: Zoom halten, nur verschieben; bei zu klein / zu groß anpassen
     const v = this.vb, bw = b.x2 - b.x1, bh = b.y2 - b.y1;
-    if (bw > v.w * 0.9 || bh > v.h * 0.9) { const r = this.rect(); const k = Math.max(bw * 1.6 / r.width, bh * 1.6 / r.height); this.vb.w = r.width * k; this.vb.h = r.height * k; }
-    this.center(b); }
+    if (bw > v.w * 0.9 || bh > v.h * 0.9) { const r = this.rect(); const k = Math.max(bw * 1.6 / r.width, bh * 1.6 / r.height); this.vb.w = r.width * k; this.vb.h = r.height * k; this.center(b); return; }
+    this.ensure(b); }
   resize() { const r = this.rect(); if (!r.width || !r.height) return;
     if (!this.inited) { this.inited = true; return this.fit(); }
     const k = this.prevW ? this.vb.w / this.prevW : this.k(); const cx = this.vb.x + this.vb.w / 2, cy = this.vb.y + this.vb.h / 2;
     this.vb.w = r.width * k; this.vb.h = r.height * k; this.vb.x = cx - this.vb.w / 2; this.vb.y = cy - this.vb.h / 2;
-    const sb = this.selBox && this.selBox(); if (sb) this.center(sb); else this.apply(); }
+    const sb = this.selBox && this.selBox(); if (sb) this.ensure(sb); else this.apply(); }
 }
 
 // ---------------- Schaltplan ----------------
