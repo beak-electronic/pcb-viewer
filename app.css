@@ -83,8 +83,6 @@ svg .hl-box { fill:rgba(216,3,115,.10); stroke:#D80373; stroke-dasharray:4 3; ve
 #svg-pcb .hl-box { fill:rgba(216,3,115,.18); stroke:#FF4FA8; }
 .hit { fill:transparent; stroke:none; cursor:pointer; }
 @media (max-width: 900px) {
-  .ansicht { height:auto; min-height:100%; }
-  .panes { flex-direction:column; } #p-sch, #p-pcb { flex:none; height:48vh; } .trenner { display:none; }
   .marke .logo { height:22px; } .projekt { display:none; } .sucheWrap input { width:130px; }
   .tab { padding:0 10px; font-size:15px; }
 }
@@ -178,3 +176,8 @@ form.sucheWrap { margin:0; } .sucheWrap input[type=search] { -webkit-appearance:
 .leiste.eng .werkzeuge { display:none; position:absolute; right:8px; top:calc(100% + 4px); z-index:50; flex-direction:column; align-items:stretch; padding:8px; background:var(--feld); border:1px solid var(--linie); border-radius:14px; box-shadow:0 8px 24px rgba(0,0,0,.18); }
 .leiste.eng.offen .werkzeuge { display:flex; }
 .leiste.eng .werkzeuge > .umschalter { align-self:stretch; justify-content:center; }
+@media (max-width: 900px), (orientation: portrait) {
+  .panes { flex-direction:column; }
+  .trenner { cursor:row-resize; }
+  .trenner span { width:48px; height:4px; }
+}

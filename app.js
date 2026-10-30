@@ -527,9 +527,9 @@ $('#thema').addEventListener('click', () => { const t = TH[(TH.indexOf(window.be
 $('#thema').title = THN[window.beakTheme()];
 // Trenner
 (() => { const tr = $('#trenner'), panes = $('#panes'); let v = +localStorage.getItem('beak-pcbv-split') || 50; const setv = x => { v = Math.min(85, Math.max(15, x)); panes.style.setProperty('--split', v + '%'); };
-  setv(v); let drag = false, x0 = 0, moved = false;
-  tr.addEventListener('pointerdown', e => { drag = true; moved = false; x0 = e.clientX; tr.setPointerCapture(e.pointerId); tr.classList.add('zieht'); });
-  tr.addEventListener('pointermove', e => { if (!drag) return; if (!moved && Math.abs(e.clientX - x0) < 4) return; moved = true; const r = panes.getBoundingClientRect(); setv((e.clientX - r.left) / r.width * 100); });
+  setv(v); let drag = false, x0 = 0, y0 = 0, moved = false; const quer = () => getComputedStyle(panes).flexDirection === 'column';
+  tr.addEventListener('pointerdown', e => { drag = true; moved = false; x0 = e.clientX; y0 = e.clientY; tr.setPointerCapture(e.pointerId); tr.classList.add('zieht'); });
+  tr.addEventListener('pointermove', e => { if (!drag) return; if (!moved && Math.hypot(e.clientX - x0, e.clientY - y0) < 4) return; moved = true; const r = panes.getBoundingClientRect(); setv(quer() ? (e.clientY - r.top) / r.height * 100 : (e.clientX - r.left) / r.width * 100); });
   const end = e => { if (!drag) return; drag = false; tr.classList.remove('zieht'); if (e && e.type === 'pointerup' && !moved) setv(50); try { localStorage.setItem('beak-pcbv-split', String(v)); } catch (_) {} };
   tr.addEventListener('pointerup', end); tr.addEventListener('pointercancel', end);
 })();
@@ -564,3 +564,4 @@ window.PCBV = { S, select, load };
 })();
 
 $('#wversion').textContent = 'PCB Viewer · Version ' + (self.PCBV_VERSION || '');
+(() => { const mq = matchMedia('(max-width: 900px), (orientation: portrait)'), set = () => $('#trenner').setAttribute('aria-orientation', mq.matches ? 'horizontal' : 'vertical'); set(); mq.addEventListener('change', set); })();
