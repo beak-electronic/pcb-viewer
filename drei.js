@@ -4,24 +4,40 @@ import { OrbitControls } from './OrbitControls.js';
 const bgrHex = c => { c = +c || 0; return ((c & 255) << 16) | (c & 0xFF00) | ((c >> 16) & 255); };
 const mil = s => parseFloat(String(s || '0')) || 0;
 let R = null;
-// ---- STEP (occt-import-js, lokal) ----
-let occtP = null; const stepCache = new Map();
-function occt() { if (!occtP) occtP = new Promise((res, rej) => { const go = () => window.occtimportjs({ locateFile: f => './' + f }).then(res, rej);
-  if (window.occtimportjs) return go(); const sc = document.createElement('script'); sc.src = './occt-import-js.js'; sc.onload = go; sc.onerror = () => rej(new Error('occt-import-js fehlt')); document.head.appendChild(sc); }); return occtP; }
-async function inflate(raw) { try { return new Uint8Array(await new Response(new Blob([raw]).stream().pipeThrough(new DecompressionStream('deflate'))).arrayBuffer()); } catch (_) { return raw; } }
-async function stepGroup(model) { // -> THREE.Group in mm (Modellkoordinaten), gecacht
-  const key = model.id + model.checksum; if (stepCache.has(key)) return stepCache.get(key).clone();
-  const oc = await occt(); const data = await inflate(model.raw);
-  const res = oc.ReadStepFile(data, { linearUnit: 'millimeter', linearDeflectionType: 'bounding_box_ratio', linearDeflection: 0.002, angularDeflection: 0.5 });
-  if (!res || !res.success) throw new Error('STEP nicht lesbar: ' + model.name);
-  const g = new THREE.Group();
-  for (const m of res.meshes) { const geo = new THREE.BufferGeometry(); geo.setAttribute('position', new THREE.Float32BufferAttribute(m.attributes.position.array, 3));
-    if (m.attributes.normal) geo.setAttribute('normal', new THREE.Float32BufferAttribute(m.attributes.normal.array, 3)); geo.setIndex(m.index.array); if (!m.attributes.normal) geo.computeVertexNormals();
-    const base = m.color ? new THREE.Color(m.color[0], m.color[1], m.color[2]) : new THREE.Color(0x9a9a9a); const mats = [new THREE.MeshStandardMaterial({ color: base, roughness: 0.5, metalness: 0.15 })];
-    if (m.brep_faces && m.brep_faces.some(f => f.color)) { const ci = new Map(); for (const f of m.brep_faces) { let mi = 0; if (f.color) { const k = f.color.join(','); if (!ci.has(k)) { ci.set(k, mats.length); mats.push(new THREE.MeshStandardMaterial({ color: new THREE.Color(...f.color), roughness: 0.5, metalness: 0.15 })); } mi = ci.get(k); } geo.addGroup(f.first * 3, (f.last - f.first + 1) * 3, mi); } }
-    g.add(new THREE.Mesh(geo, mats.length > 1 && geo.groups.length ? mats : mats[0])); }
-  stepCache.set(key, g); return g.clone(); }
-const cloneMats = o => o.traverse(n => { if (n.isMesh) n.material = Array.isArray(n.material) ? n.material.map(m => m.clone()) : n.material.clone(); });
+// ---- STEP: Worker-Pool (occt-import-js), Dedupe per Inhalts-Hash, IndexedDB-Cache, gemeinsame Geometrie/Materialien ----
+const STEP_PARAMS = { linearUnit: 'millimeter', linearDeflectionType: 'bounding_box_ratio', linearDeflection: 0.004, angularDeflection: 0.6 };
+const PKEY = 'v2|' + JSON.stringify(STEP_PARAMS);
+let pool = null; let jobId = 0; const waiting = new Map();
+let wasmP = null; const wasmMod = () => wasmP || (wasmP = (async () => { try { return await WebAssembly.compileStreaming(fetch('./occt-import-js.wasm')); } catch (_) { try { return await WebAssembly.compile(await (await fetch('./occt-import-js.wasm')).arrayBuffer()); } catch (e) { return null; } } })());
+const POOLMAX = Math.max(1, Math.min(4, (navigator.hardwareConcurrency || 2) - 1));
+function addWorker() { const w = new Worker('./step-worker.js'); w.onmessage = ev => { const j = waiting.get(ev.data.id); waiting.delete(ev.data.id); pool.busy.delete(w); pump(); if (j) (ev.data.ok ? j.res(ev.data) : j.rej(new Error(ev.data.err))); }; w.onerror = ev => { console.warn('step-worker', ev.message); };
+  w.ready = wasmMod().then(m => { if (m) w.postMessage({ mod: m }); }); pool.ws.push(w); return w; }
+function getPool() { if (pool) return pool; pool = { ws: [], q: [], busy: new Set() }; addWorker(); return pool; }
+function pump() { const p = pool; while (p.q.length > p.ws.length - p.busy.size && p.ws.length < POOLMAX) addWorker(); for (const w of p.ws) { if (!p.q.length) return; if (p.busy.has(w)) continue; const j = p.q.shift(); p.busy.add(w); waiting.set(j.id, j); w.ready.then(() => w.postMessage({ id: j.id, raw: j.raw, params: STEP_PARAMS }, j.raw ? [j.raw.buffer] : [])); } }
+const runJob = raw => new Promise((res, rej) => { getPool().q.push({ id: ++jobId, raw, res, rej }); pump(); });
+// IndexedDB
+let dbP = null;
+const db = () => dbP || (dbP = new Promise(res => { try { const r = indexedDB.open('beak-pcbv-3d', 1); r.onupgradeneeded = () => r.result.createObjectStore('step'); r.onsuccess = () => res(r.result); r.onerror = () => res(null); } catch (_) { res(null); } }));
+const idbGet = async k => { const d = await db(); if (!d) return null; return new Promise(res => { try { const q = d.transaction('step').objectStore('step').get(k); q.onsuccess = () => res(q.result || null); q.onerror = () => res(null); } catch (_) { res(null); } }); };
+const idbPut = async (k, v) => { const d = await db(); if (!d) return; try { d.transaction('step', 'readwrite').objectStore('step').put(v, k); } catch (_) {} };
+async function hashOf(raw) { try { const h = new Uint8Array(await crypto.subtle.digest('SHA-256', raw)); return Array.from(h, b => b.toString(16).padStart(2, '0')).join(''); } catch (_) { let h = 2166136261; for (let i = 0; i < raw.length; i++) h = Math.imul(h ^ raw[i], 16777619); return 'f' + (h >>> 0).toString(16) + '_' + raw.length; } }
+const geoCache = new Map(); // hash -> Promise<[{geo, mat}]>
+const matCache = new Map();
+const matFor = c => { const k = c.join(','); if (!matCache.has(k)) matCache.set(k, new THREE.MeshStandardMaterial({ color: new THREE.Color(c[0], c[1], c[2]), roughness: 0.5, metalness: 0.15 })); return matCache.get(k); };
+const PINK = new THREE.MeshStandardMaterial({ color: 0xD80373, emissive: 0xD80373, emissiveIntensity: 0.35, roughness: 0.5, metalness: 0.15 });
+const toParts = parts => parts.map(p => { const g = new THREE.BufferGeometry(); g.setAttribute('position', new THREE.BufferAttribute(p.pos, 3)); g.setIndex(new THREE.BufferAttribute(p.idx, 1)); if (p.nrm) g.setAttribute('normal', new THREE.BufferAttribute(p.nrm, 3)); else g.computeVertexNormals(); g.computeBoundingSphere(); return { geo: g, mat: matFor(p.color) }; });
+export const stats = { worker: 0, idb: 0, mem: 0, ms: 0 };
+function modelParts(model) {
+  const mk = model.id + '|' + model.checksum;
+  if (model._hp) return model._hp;
+  return (model._hp = (async () => {
+    const raw = model.raw instanceof Uint8Array ? model.raw : new Uint8Array(model.raw); const h = (await hashOf(raw)) + '|' + PKEY;
+    if (geoCache.has(h)) { stats.mem++; return geoCache.get(h); }
+    const pr = (async () => { const c = await idbGet(h); if (c) { stats.idb++; return toParts(c); }
+      const r = await runJob(raw.slice()); stats.worker++; stats.ms += r.ms || 0; idbPut(h, r.parts.map(p => ({ color: p.color, pos: p.pos, nrm: p.nrm, idx: p.idx }))); return toParts(r.parts); })();
+    geoCache.set(h, pr); pr.catch(() => geoCache.delete(h)); void mk; return pr; })()); }
+// Vorwärmen: Worker + WASM starten und Modelle der Platinen im Hintergrund konvertieren (Cache)
+export function warm(pcbs) { try { getPool(); runJob(null).catch(() => {}); (pcbs || []).forEach(pc => (pc.data.models || []).forEach(m => { if (m.raw) modelParts(m).catch(() => {}); })); } catch (e) { console.warn(e); } }
 function cfg3d(board) {
   const raw = board['3DCONFIGURATION'] || ''; const o = {};
   raw.split('`').forEach(p => { const i = p.indexOf('='); if (i > 0) o[p.slice(0, i).toUpperCase()] = p.slice(i + 1); });
@@ -55,8 +71,8 @@ function shapeFrom(pts, ox, oy) { const s = new THREE.Shape(); pts.forEach((p, i
 function outlinePts(ol) { const a = []; ol.forEach(v => { a.push({ x: v.x, y: v.y }); if (v.k === 1 && v.r > 0) { const sw = ((v.ea - v.sa) % 360 + 360) % 360 || 360; const n = Math.ceil(sw / 5); for (let i = 1; i < n; i++) { const t = (v.sa + sw * i / n) * Math.PI / 180; a.push({ x: v.cx + v.r * Math.cos(t), y: v.cy + v.r * Math.sin(t) }); } } }); return a; }
 export const Drei = { _R: () => R,
   async show(box, pcb, H) {
-    if (R && R.pcb === pcb) { R.H = H; this.setSide(H.side); R.running = true; R.loop(); return; }
-    this.stop(); if (R) { R.renderer.dispose(); box.innerHTML = ''; }
+    if (R && R.pcb === pcb) { R.H = H; this.setSide(H.side); R.running = true; R.dirty = true; R.loop(); return; }
+    const T0 = performance.now(); this.stop(); if (R) { R.dead = true; R.renderer.dispose(); box.innerHTML = ''; }
     const d = pcb.data, C = cfg3d(d.board), T = thickness(d.board);
     const renderer = new THREE.WebGLRenderer({ antialias: true, alpha: false, logarithmicDepthBuffer: false }); MAXT = Math.min(8192, renderer.capabilities.maxTextureSize || 4096); renderer.setPixelRatio(Math.min(2, devicePixelRatio)); box.appendChild(renderer.domElement);
     const prog = document.createElement('div'); prog.className = 'lade3d'; prog.innerHTML = '<div class="lt">Lade 3D-Ansicht …</div><div class="lb"><i></i></div>'; box.appendChild(prog);
@@ -97,6 +113,7 @@ export const Drei = { _R: () => R,
       m.position.z = side === 'oben' ? T + 0.6 : -0.6; return m; };
     const faces = new THREE.Group(); scene.add(faces);
     const buildFaces = async () => { const [a, b] = await Promise.all([mkFace('oben'), mkFace('unten')]); faces.clear(); faces.add(a, b); };
+    (d.models || []).forEach(m => { if (m.raw) modelParts(m).catch(() => {}); }); // Konvertierung parallel zur Textur
     setP('Erzeuge Oberflächen …', 0.08); await yieldUI(); await buildFaces();
     // Bauteile
     const compMeshes = new Map(); const has = new Set();
@@ -109,28 +126,29 @@ export const Drei = { _R: () => R,
       const m = new THREE.Mesh(g, mat); m.position.z = bot ? -so - (oh - so) : T + so; m.userData.comp = b.comp; world.add(m); has.add(b.comp);
       if (!compMeshes.has(b.comp)) compMeshes.set(b.comp, []); compMeshes.get(b.comp).push(m); }
     const placeStep = async ([b, mdl]) => { const c = d.comps[b.comp], bot = c && c.layer === 'BOTTOM';
-      const inner = await stepGroup(mdl); cloneMats(inner); inner.scale.setScalar(MM);
+      const parts = await modelParts(mdl); if (R0.dead) return; const inner = new THREE.Group(); parts.forEach(pt => { const m = new THREE.Mesh(pt.geo, pt.mat); m.userData.m0 = pt.mat; inner.add(m); }); inner.scale.setScalar(MM);
       const r = THREE.MathUtils.degToRad, rx = +(b.p['MODEL.3D.ROTX'] ?? mdl.rotx), ry = +(b.p['MODEL.3D.ROTY'] ?? mdl.roty), rz = +(b.p['MODEL.3D.ROTZ'] ?? mdl.rotz);
       const mR = new THREE.Group(); mR.add(inner); mR.rotation.set(r(rx), r(ry), r(rz), 'ZYX');
       const pl = new THREE.Group(); pl.add(mR); pl.rotation.z = r(+(b.p['MODEL.2D.ROTATION'] || 0)); const dz = mil(b.p['MODEL.3D.DZ']);
       const outer = new THREE.Group(); outer.add(pl); outer.position.set(mil(b.p['MODEL.2D.X']) - ox, mil(b.p['MODEL.2D.Y']) - oy, bot ? -dz : T + dz); if (bot) outer.rotation.x = Math.PI; // Unterseite gespiegelt
       outer.userData.comp = b.comp; outer.traverse(n => { n.userData.comp = b.comp; }); world.add(outer);
-      const ms = []; outer.traverse(n => { if (n.isMesh) ms.push(n); }); compMeshes.set(b.comp, (compMeshes.get(b.comp) || []).concat(ms)); };
+      const ms = []; outer.traverse(n => { if (n.isMesh) ms.push(n); }); compMeshes.set(b.comp, (compMeshes.get(b.comp) || []).concat(ms));
+      if (R0.selDes && d.comps[b.comp]?.des === R0.selDes) ms.forEach(m => { m.material = PINK; }); R0.dirty = true; };
     const stepFail = [];
-    if (stepJobs.length) { setP('Lade 3D-Engine …', 0.15); await yieldUI(); try { await occt(); } catch (e) { console.warn(e); } }
-    for (let k = 0; k < stepJobs.length; k++) { const j = stepJobs[k]; setP(`Lade 3D-Modelle … ${k + 1} von ${stepJobs.length}`, 0.2 + 0.8 * k / stepJobs.length); await yieldUI();
-      try { await placeStep(j); } catch (e) { console.warn(e); stepFail.push(d.comps[j[0].comp]?.des); has.delete(j[0].comp); } }
-    prog.classList.add('fertig'); setTimeout(() => prog.remove(), 250);
-    pcb.stepInfo = { ok: stepJobs.length - stepFail.length, fail: stepFail };
-    // keine Ersatz-Quader: nur Bauteile mit echtem 3D-Modell (STEP oder Body aus der Datei)
+    // Platine sofort zeigen, Modelle streamen
     const sel = new THREE.Group(); scene.add(sel);
-    R = { world, pcb, H, renderer, scene, cam, ctl, box, compMeshes, sel, T, size: Math.max(w, h), buildFaces, running: true, side: 'oben' };
-    const resize = () => { const r = box.getBoundingClientRect(); if (!r.width || !r.height) return; renderer.setSize(r.width, r.height, false); cam.aspect = r.width / r.height; cam.updateProjectionMatrix(); };
+    const R0 = R = { dirty: true, world, pcb, H, renderer, scene, cam, ctl, box, compMeshes, sel, T, size: Math.max(w, h), buildFaces, running: true, side: 'oben', selDes: null };
+    const resize = () => { const r = box.getBoundingClientRect(); if (!r.width || !r.height) return; renderer.setSize(r.width, r.height, false); cam.aspect = r.width / r.height; cam.updateProjectionMatrix(); if (R) R.dirty = true; };
     R.ro = new ResizeObserver(resize); R.ro.observe(box); resize();
-    const span = Math.hypot(w, h); R.loop = () => { if (!R.running) return; ctl.update();
+    const span = Math.hypot(w, h); R.loop = () => { if (!R0.running || R !== R0) return; const moved = ctl.update();
       // Tiefenbereich an Abstand + Platinengröße anpassen (sonst Z-Fighting/Moiré bei großen Nutzen)
-      const dist = cam.position.distanceTo(ctl.target), nr = Math.max(0.5, (dist - span) * 0.5, dist / 200), fr = dist + span * 2; if (Math.abs(cam.near - nr) > nr * 0.05 || Math.abs(cam.far - fr) > fr * 0.05) { cam.near = nr; cam.far = fr; cam.updateProjectionMatrix(); }
-      renderer.render(scene, cam); requestAnimationFrame(R.loop); };
+      const dist = cam.position.distanceTo(ctl.target), nr = Math.max(0.5, (dist - span) * 0.5, dist / 200), fr = dist + span * 2; if (Math.abs(cam.near - nr) > nr * 0.05 || Math.abs(cam.far - fr) > fr * 0.05) { cam.near = nr; cam.far = fr; cam.updateProjectionMatrix(); cam.userData.nf = true; }
+      if (moved || R0.dirty || cam.userData.nf) { R0.dirty = false; cam.userData.nf = false; renderer.render(scene, cam); } requestAnimationFrame(R.loop); };
+    R.world.visible = !H.hidden.has(950); this.setSide(H.side, true); R.loop(); R0.t = { platine: Math.round(performance.now() - T0) };
+    if (stepJobs.length) { prog.classList.add('strom'); let done = 0; setP(`Lade 3D-Modelle … 0 von ${stepJobs.length}`, 0.2);
+      const all = stepJobs.map(j => placeStep(j).catch(e => { console.warn(e); stepFail.push(d.comps[j[0].comp]?.des); has.delete(j[0].comp); }).then(() => { done++; setP(`Lade 3D-Modelle … ${done} von ${stepJobs.length}`, 0.2 + 0.8 * done / stepJobs.length); }));
+      Promise.all(all).then(() => { R0.t.modelle = Math.round(performance.now() - T0); pcb.stepInfo = { ok: stepJobs.length - stepFail.length, fail: stepFail }; R0.modelsDone = true; prog.classList.add('fertig'); setTimeout(() => prog.remove(), 250); }); }
+    else { R0.t.modelle = R0.t.platine; R0.modelsDone = true; prog.classList.add('fertig'); setTimeout(() => prog.remove(), 250); }
     // Klick = Auswahl
     let down = null; renderer.domElement.addEventListener('pointerdown', e => (down = { x: e.clientX, y: e.clientY }));
     renderer.domElement.addEventListener('pointerup', e => { if (!down || Math.hypot(e.clientX - down.x, e.clientY - down.y) > 5) return; const r = renderer.domElement.getBoundingClientRect();
@@ -138,15 +156,12 @@ export const Drei = { _R: () => R,
       const hit = world.visible ? ray.intersectObjects(world.children, true)[0] : null; let des = hit ? d.comps[hit.object.userData.comp]?.des : null;
       if (!hit) { const f = ray.intersectObjects(faces.children)[0]; if (f && R.H.onPickAt) { R.H.onPickAt(f.point.x + ox, f.point.y + oy); return; } if (f) { const x = f.point.x + ox, y = -(f.point.y + oy); let best = null, ba = Infinity; pcb.boxes.forEach((b, i) => { if (b && x >= b.x1 && x <= b.x2 && y >= b.y1 && y <= b.y2) { const a = (b.x2 - b.x1) * (b.y2 - b.y1); if (a < ba) { ba = a; best = d.comps[i].des; } } }); des = best; } }
       R.H.onPick(des); });
-    R.world.visible = !H.hidden.has(950); this.setSide(H.side, true); R.loop();
   },
   setSide(side, force) { if (!R) return; if (R.side === side && !force) return; R.side = side; const D = R.size * 2.4; R.cam.up.set(0, 1, 0);
-    if (side === 'unten') R.cam.position.set(0, -D * 0.25, -D); else R.cam.position.set(0, -D * 0.25, D + R.T); R.ctl.target.set(0, 0, R.T / 2); R.cam.updateProjectionMatrix(); R.ctl.update(); },
+    if (side === 'unten') R.cam.position.set(0, -D * 0.25, -D); else R.cam.position.set(0, -D * 0.25, D + R.T); R.ctl.target.set(0, 0, R.T / 2); R.cam.updateProjectionMatrix(); R.ctl.update(); R.dirty = true; },
   fit() { if (R) this.setSide(R.side, true); },
-  select(des) { if (!R) return; const d = R.pcb.data; R.compMeshes.forEach((ms, i) => ms.forEach(m => { const on = d.comps[i].des === des; (Array.isArray(m.material) ? m.material : [m.material]).forEach(mt => { if (!mt.userData.c0) mt.userData.c0 = mt.color.clone(); mt.color.copy(on ? new THREE.Color(0xD80373) : mt.userData.c0); mt.emissive = new THREE.Color(on ? 0xD80373 : 0x000000); mt.emissiveIntensity = on ? 0.35 : 0; }); }));
-    R.sel.clear(); const i = d.comps.findIndex(c => c.des === des); if (i < 0) return; const b = R.pcb.boxes[i]; const ms = R.compMeshes.get(i) || [];
-    const bx = new THREE.Box3(); ms.forEach(m => bx.expandByObject(m)); if (bx.isEmpty()) return; bx.expandByScalar(8);
-    void b; },
-  async layers(hidden) { if (!R) return; R.H.hidden = hidden; R.world.visible = !hidden.has(950); R.sel.visible = R.world.visible; await R.buildFaces(); },
+  select(des) { if (!R) return; const d = R.pcb.data; R.selDes = des;
+    R.compMeshes.forEach((ms, i) => { const on = d.comps[i].des === des; ms.forEach(m => { if (!m.userData.m0) m.userData.m0 = m.material; m.material = on ? PINK : m.userData.m0; }); }); R.dirty = true; },
+  async layers(hidden) { if (!R) return; R.H.hidden = hidden; R.world.visible = !hidden.has(950); R.sel.visible = R.world.visible; await R.buildFaces(); R.dirty = true; },
   stop() { if (R) R.running = false; }
 };

@@ -189,3 +189,5 @@ main { background:var(--back); }
 /* Zeiger auf allem Klickbaren (Öffnen-Label inkl. Kinder, Titel-Auswahlen) */
 label.tab, label.tab *, label.wbtn, label.wbtn *, button, button *, .wbtn, .titelWrap h3, #pcbTitel, #schTitel.klickbar, .menu button, #ebenen label, #ebenen input, [role=button] { cursor:pointer; }
 button:disabled, button:disabled * { cursor:default; }
+.lade3d.strom { inset:auto 12px 12px 12px; padding:10px 14px; border-radius:12px; background:rgba(255,255,255,.9); box-shadow:0 4px 16px rgba(0,0,0,.15); pointer-events:none; gap:8px; }
+html.ist-dunkel .lade3d.strom { background:rgba(28,28,30,.9); color:#D0CDCE; }

@@ -170,11 +170,14 @@ function renderSch(recs) {
 }
 
 // ---------------- Leiterplatte 2D ----------------
+// Altium-Standardfarben (die PcbDoc speichert keine Lagenfarben, nur Deckkraft in 2DCONFIGURATION)
+const MID = ['#BC8E00', '#70DBFA', '#00CC66', '#9966FF', '#00FFFF', '#800080', '#FF00FF', '#808000', '#FFFF00', '#808080', '#FFFFFF', '#800080', '#808000', '#C0C0C0'];
+const PLANE = ['#008000', '#800000', '#808000', '#000080', '#008080', '#800080', '#C0C0C0', '#808080'];
 const MECH = ['#C000C0', '#008080', '#808000', '#00A0C0', '#C08000', '#8080FF', '#40C040', '#FF8080'];
 function layerColor(l) {
   const m = { 1: '#FF0000', 32: '#0000FF', 33: '#FFFF00', 34: '#808000', 35: '#808080', 36: '#800000', 37: '#800080', 38: '#FF00FF', 55: '#800000', 56: '#FF00FF', 73: '#FF002A', 74: '#C0C0C0', 901: '#3C3C3C' };
   if (l === 950) return '#808080'; if (l === 900) l = 57; // Platinenkontur = Farbe Mechanical 1
-  if (m[l]) return m[l]; if (l >= 2 && l <= 31) return ['#BCBC00', '#00C0C0', '#C08040', '#80C000'][l % 4]; if (l >= 39 && l <= 54) return '#008000'; if (l >= 57 && l <= 72) return MECH[(l - 57) % 8]; return '#808080';
+  if (m[l]) return m[l]; if (l >= 2 && l <= 31) return MID[(l - 2) % MID.length]; if (l >= 39 && l <= 54) return PLANE[(l - 39) % PLANE.length]; if (l >= 57 && l <= 72) return MECH[(l - 57) % 8]; return '#808080';
 }
 const LAYER_DE = { 950: 'Bauteile (3D)', 1: 'Top Layer (Kupfer oben)', 32: 'Bottom Layer (Kupfer unten)', 33: 'Top Overlay (Bestückungsdruck oben)', 34: 'Bottom Overlay (Bestückungsdruck unten)', 35: 'Top Paste', 36: 'Bottom Paste', 37: 'Top Solder (Lötstopp oben)', 38: 'Bottom Solder (Lötstopp unten)', 56: 'Keep-Out', 74: 'Multi-Layer (Pads)', 900: 'Platinenkontur', 901: 'Bohrungen' };
 function padEl(p, sx, sy, shape, dc, grow = 0) {
@@ -458,6 +461,8 @@ async function load(files) {
     S.pcbs = parsed.map(({ name, data }) => ({ name, data, layers: pcbLayers(data), boxes: compBoxes(data) })); S.pcb = S.pcbs[0] || null;
     S.sheet = 0; S.sel = null; msg.textContent = '';
     show();
+    // 3D vorwärmen (Worker/WASM + STEP-Konvertierung im Hintergrund)
+    if (S.pcbs.some(p => (p.data.models || []).length)) (window.requestIdleCallback || (f => setTimeout(f, 300)))(async () => { try { if (!window.Drei) { const m = await import('./drei.js'); window.Drei = m.Drei; window.Drei3 = m; } (window.Drei3 || await import('./drei.js')).warm(S.pcbs); } catch (e) { console.warn(e); } });
   } catch (e) { console.error(e); msg.className = 'meldung fehler'; msg.textContent = 'Fehler: ' + e.message; if ($('#v-start').hidden) alert(e.message); }
 }
 function pcbTitle() { const pt = $('#pcbTitel'), multi = (S.pcbs || []).length > 1; pt.textContent = S.pcb ? noExt(S.pcb.name) + (multi ? ' ▾' : '') : 'Leiterplatte';
