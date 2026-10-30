@@ -298,13 +298,12 @@ function drawOrder(side) {
   const mids = []; for (let i = 2; i <= 31; i++) mids.push(i); for (let i = 39; i <= 54; i++) mids.push(i);
   const mech = []; for (let i = 57; i <= 72; i++) mech.push(i);
   const top = [1, 35, 37, 33], bot = [32, 36, 38, 34];
-  return side === 'unten' ? [900, ...top, ...mids, ...bot, ...mech, 55, 56, 73, 74, 901, 902] : [900, ...bot, ...mids, ...top, ...mech, 55, 56, 73, 74, 901, 902];
+  return side === 'unten' ? [...top, ...mids, ...bot, ...mech, 55, 56, 73, 74, 901, 902] : [...bot, ...mids, ...top, ...mech, 55, 56, 73, 74, 901, 902];
 }
 function renderPcb() {
   const d = S.pcb.data, L = S.pcb.layers; let s = '';
   for (const l of drawOrder(S.side)) {
-    if (l === 900) { if (d.outline.length) s += `<g data-l="900"${S.hidden.has(900) ? ' display="none"' : ''}><path d="${outlinePath(d.outline)}" fill="#000" stroke="${layerColor(900)}" stroke-width="6" vector-effect="non-scaling-stroke"/></g>`; continue; }
-    if (l === 902) { if ((d.cutouts || []).length) s += `<g data-l="900"${S.hidden.has(900) ? ' display="none"' : ''}><path d="${cutPath(d)}" fill="#0A0A0A" stroke="${layerColor(900)}" stroke-width="1.5" vector-effect="non-scaling-stroke"/></g>`; continue; }
+    if (l === 902) { if ((d.cutouts || []).length) s += `<path class="ausschnitt" d="${cutPath(d)}" fill="#0A0A0A"/>`; continue; }
     if (!L.has(l)) continue; const c = layerColor(l), hole = l === 901;
     s += `<g data-l="${l}" fill="${hole ? '#101010' : c}" stroke="${c}" stroke-linecap="round" fill-opacity="${hole ? 1 : l === 37 || l === 38 ? 0.45 : 0.85}" stroke-opacity="${hole ? 1 : l === 37 || l === 38 ? 0.45 : 0.85}"${S.hidden.has(l) ? ' display="none"' : ''}>${L.get(l).join('')}</g>`;
   }
@@ -314,7 +313,7 @@ function renderPcb() {
   highlight(false);
 }
 function buildLayerPanel() {
-  const L = S.pcb.layers, have = [...new Set([900, ...L.keys(), 950])].sort((a, b) => (a === 950 ? 999 : drawOrder('oben').indexOf(a)) - (b === 950 ? 999 : drawOrder('oben').indexOf(b)));
+  const L = S.pcb.layers, have = [...new Set([...L.keys(), 950])].sort((a, b) => (a === 950 ? 999 : drawOrder('oben').indexOf(a)) - (b === 950 ? 999 : drawOrder('oben').indexOf(b)));
   $('#ebenen').innerHTML = '<div class="klein" style="font-weight:700;margin-bottom:4px">Ebenen anzeigen</div>' + have.map(l => `<label><input type="checkbox" data-l="${l}"${S.hidden.has(l) ? '' : ' checked'}><span class="farbe" style="background:${layerColor(l)}"></span>${esc(LAYER_DE[l] || S.pcb.data.layerNames[l] || ('Layer ' + l))}</label>`).join('')
     + '<div class="zeile" style="display:flex;gap:6px;margin-top:6px"><button class="klein" id="alleEb">Alle</button><button class="klein" id="kuEb">Nur Kupfer</button></div>';
 }
@@ -516,7 +515,7 @@ $$('#seite button').forEach(b => b.addEventListener('click', () => { S.side = b.
 $$('#dim button').forEach(b => b.addEventListener('click', () => { $$('#dim button').forEach(x => x.classList.toggle('an', x === b)); if (b.dataset.d === '3d') { S.dim = '3d'; start3d(); } else set2d(); }));
 $('#ebenenKnopf').addEventListener('click', () => { $('#ebenen').hidden = !$('#ebenen').hidden; });
 $('#ebenen').addEventListener('change', e => { const l = +e.target.dataset.l; if (e.target.checked) S.hidden.delete(l); else S.hidden.add(l); const g = $(`#svg-pcb g[data-l="${l}"]`); if (g) g.style.display = e.target.checked ? '' : 'none'; if (S.dim === '3d') window.Drei?.layers?.(S.hidden); });
-$('#ebenen').addEventListener('click', e => { if (e.target.id !== 'alleEb' && e.target.id !== 'kuEb') return; const keep = e.target.id === 'kuEb' ? new Set([1, 32, 74, 900, 901, ...Array.from({ length: 46 }, (_, i) => i + 2).filter(i => i <= 31 || (i >= 39 && i <= 54))]) : null;
+$('#ebenen').addEventListener('click', e => { if (e.target.id !== 'alleEb' && e.target.id !== 'kuEb') return; const keep = e.target.id === 'kuEb' ? new Set([1, 32, 74, 901, ...Array.from({ length: 46 }, (_, i) => i + 2).filter(i => i <= 31 || (i >= 39 && i <= 54))]) : null;
   S.hidden = new Set(); if (keep) S.pcb.layers.forEach((_, l) => { if (!keep.has(l)) S.hidden.add(l); }); buildLayerPanel(); renderPcb(); if (S.dim === '3d') window.Drei?.layers?.(S.hidden); });
 const sucheAus = () => { const e = { target: $('#suche') }; const v = e.target.value.trim(); if (!v) return select(null); const all = [...$('#desListe').options].map(o => o.value); let m = all.find(d => d.toLowerCase() === v.toLowerCase()); if (!m) { const c = all.filter(d => d.toLowerCase().startsWith(v.toLowerCase())); if (c.length === 1) m = c[0]; } if (m) { e.target.value = m; select(m, 'suche'); } };
 $('#suche').addEventListener('change', sucheAus);
