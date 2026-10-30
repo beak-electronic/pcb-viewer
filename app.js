@@ -562,3 +562,5 @@ window.PCBV = { S, select, load };
     new ResizeObserver(pruefe).observe(l); pruefe();
   });
 })();
+
+$('#wversion').textContent = 'PCB Viewer · Version ' + (self.PCBV_VERSION || '');
