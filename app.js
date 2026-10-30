@@ -580,8 +580,13 @@ $('#wversion').textContent = 'PCB Viewer · Version ' + (self.PCBV_VERSION || ''
     const drin = l.filter(p => p.zone.some(z => z && z.contains(e.target)));
     const weg = l.filter(p => !drin.includes(p)); if (!weg.length) return;
     weg.forEach(p => p.zu());
-    if (!drin.length) { schlucken = true; e.stopPropagation(); e.preventDefault(); setTimeout(() => { schlucken = false; }, 600); }
+    if (!drin.length && !e.target.closest('#ebenenKnopf, #anzeigeKnopf, .titelWrap, .hamburger')) { schlucken = true; e.stopPropagation(); e.preventDefault(); setTimeout(() => { schlucken = false; }, 600); }
   }, true);
   ['pointerup', 'mouseup', 'click', 'touchend'].forEach(t => document.addEventListener(t, eat, true));
   document.addEventListener('keydown', e => { if (e.key === 'Escape') offen().forEach(p => p.zu()); });
+})();
+// Knopf eines offenen Popovers in BEAK-Pink
+(() => {
+  const P = [['#ebenen', '#ebenenKnopf'], ['#anzeigeMenu', '#anzeigeKnopf'], ['#blattMenu', '#schTitel'], ['#platMenu', '#pcbTitel']];
+  P.forEach(([m, k]) => { const me = $(m), kn = $(k); if (!me || !kn) return; const set = () => { kn.classList.toggle('popAn', !me.hidden); kn.setAttribute('aria-expanded', String(!me.hidden)); }; new MutationObserver(set).observe(me, { attributes: true, attributeFilter: ['hidden'] }); set(); });
 })();

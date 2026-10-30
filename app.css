@@ -181,3 +181,8 @@ form.sucheWrap { margin:0; } .sucheWrap input[type=search] { -webkit-appearance:
   .trenner { cursor:row-resize; }
   .trenner span { width:48px; height:4px; }
 }
+button.popAn, html.ist-dunkel button.popAn, header#kopf button.popAn, html.ist-dunkel header#kopf button.popAn, .leiste button.hamburger.an, html.ist-dunkel .leiste button.hamburger.an { background:var(--pink) !important; border-color:var(--pink) !important; color:#fff !important; }
+h3.popAn, html.ist-dunkel h3.popAn { color:var(--pink) !important; }
+/* Statusleiste (iPad-PWA): Fläche hinter safe-area-top = Kopfzeilenfarbe */
+html, body { background:#FFFFFF; } html.ist-dunkel, html.ist-dunkel body { background:#1C1C1E; }
+main { background:var(--back); }
