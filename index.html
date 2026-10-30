@@ -1,0 +1,61 @@
+<!DOCTYPE html>
+<html lang="de">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1, maximum-scale=1, minimum-scale=1, user-scalable=no, viewport-fit=cover">
+<meta name="apple-mobile-web-app-capable" content="yes">
+<meta name="mobile-web-app-capable" content="yes">
+<meta name="apple-mobile-web-app-title" content="PCB Viewer">
+<meta name="application-name" content="PCB Viewer">
+<meta name="msapplication-TileColor" content="#D80373">
+<meta name="msapplication-TileImage" content="mstile-150x150.png">
+<meta name="msapplication-config" content="browserconfig.xml">
+<link rel="stylesheet" href="app.css">
+</head>
+<body>
+<div id="ladeSchirm" aria-hidden="true"><img class="hell" src="logo-pcb-viewer-hell.svg" alt=""><img class="dunkel" src="logo-pcb-viewer.svg" alt=""><div class="ladeSpin"></div></div>
+<!-- PCB Viewer: zeigt Altium SchDoc/PcbDoc nur an (keine Bearbeitung). Dateien bleiben lokal im Browser. -->
+<header id="kopf">
+  <label class="tab pink oeffnen"><svg viewBox="0 0 24 24" width="20" height="20" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true" style="margin-right:6px;flex:none"><path d="M3 19V6a1 1 0 0 1 1-1h5l2 2h7a1 1 0 0 1 1 1v2"/><path d="M3 19l3-8h16l-3 8z"/></svg>Öffnen<input id="datei" type="file" multiple accept=".SchDoc,.PcbDoc,.PrjPcb,.zip,.schdoc,.pcbdoc,.prjpcb"></label>
+  <div id="projekt" class="projekt"></div>
+  <nav id="tabs">
+    <div class="sucheWrap" id="sucheWrap" hidden><input id="suche" list="desListe" placeholder="Bauteil suchen" autocomplete="off" spellcheck="false"><datalist id="desListe"></datalist></div>
+    <div class="menuWrap" id="ansichtTabs" hidden><button class="tab" id="anzeigeKnopf" aria-haspopup="true">Anzeige ▾</button>
+      <div class="menu karte" id="anzeigeMenu" hidden><button data-a="sch">Schaltplan</button><button data-a="pcb">Leiterplatte</button><button data-a="beide" class="an">Beides</button></div></div>    <button id="thema" class="tab icon" title="Anzeige: System / Hell / Dunkel" aria-label="Anzeige">◐</button>
+  </nav>
+</header>
+<main>
+  <section id="v-start" class="willkommen">
+    <div class="wkarte" id="ablage">
+      <span class="wbeak" aria-label="BEAK"><span class="bl">B&nbsp;E&nbsp;A&nbsp;K</span><span class="bd">•</span></span>
+      <img class="wicon" src="icon-180.png" alt="" width="72" height="72">
+      <h1 class="wtitel">PCB Viewer</h1>
+      <p class="wsub">Schaltplan und Leiterplatte ansehen</p>
+      <div class="waktionen">
+        <label class="wbtn primary" id="wOeffnen"><input type="file" id="datei2" multiple accept=".SchDoc,.PcbDoc,.PrjPcb,.zip,.schdoc,.pcbdoc,.prjpcb" hidden>Öffnen</label>
+        <button id="beispiel" class="wbtn">Beispiel öffnen</button>
+      </div>
+      <p id="meldung" class="meldung"></p>
+      <p class="wversion">PCB Viewer · Version 1.1</p>
+    </div>
+  </section>
+  <section id="v-view" class="ansicht beide" hidden>
+    <div class="panes" id="panes">
+    <div class="karte pane" id="p-sch">
+      <div class="leiste"><div class="menuWrap titelWrap" id="blattWrap"><h3 id="schTitel" class="titel">Schaltplan</h3><div class="menu karte links" id="blattMenu" hidden></div></div><span class="fuell"></span><button class="klein icon" data-fit="sch" title="Einpassen" aria-label="Einpassen"><svg viewBox="0 0 24 24" width="20" height="20" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M4 9V4h5M20 9V4h-5M4 15v5h5M20 15v5h-5"/></svg></button></div>
+      <div class="flaeche papier" id="f-sch"><svg id="svg-sch" xmlns="http://www.w3.org/2000/svg"></svg><div class="leer" id="leer-sch">Kein Schaltplan geladen</div><div class="info" id="info" hidden></div></div>
+    </div>
+    <div class="trenner" id="trenner" role="separator" aria-orientation="vertical" title="Ziehen, um die Aufteilung zu ändern"><span></span></div>
+    <div class="karte pane" id="p-pcb">
+      <div class="leiste"><div class="menuWrap titelWrap" id="platWrap"><h3 id="pcbTitel" class="titel">Leiterplatte</h3><div class="menu karte links" id="platMenu" hidden></div></div><span class="fuell"></span><div class="umschalter klein" id="dim"><button data-d="2d" class="an icon" title="2D" aria-label="2D"><svg viewBox="0 0 24 24" width="20" height="20" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><rect x="4" y="6" width="16" height="12" rx="1"/><rect x="9" y="10" width="6" height="4" fill="currentColor" stroke="none"/></svg></button><button data-d="3d" class="icon" title="3D" aria-label="3D"><svg viewBox="0 0 24 24" width="20" height="20" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M3 11l9-4 9 4-9 4z"/><path d="M3 11v3l9 4 9-4v-3"/><path d="M12 15v3"/></svg></button></div>
+        <div class="umschalter klein" id="seite"><button data-s="oben" class="an icon" title="Oben" aria-label="Oben"><svg viewBox="0 0 24 24" width="24" height="24" fill="currentColor" shape-rendering="crispEdges" aria-hidden="true"><rect x="3" y="11" width="18" height="2"/><rect x="8" y="5" width="8" height="5"/></svg></button><button data-s="unten" class="icon" title="Unten" aria-label="Unten"><svg viewBox="0 0 24 24" width="24" height="24" fill="currentColor" shape-rendering="crispEdges" aria-hidden="true"><rect x="3" y="11" width="18" height="2"/><rect x="8" y="14" width="8" height="5"/></svg></button></div><button class="klein icon" id="ebenenKnopf" title="Ebenen" aria-label="Ebenen"><svg viewBox="0 0 24 24" width="24" height="24" fill="currentColor" shape-rendering="crispEdges" aria-hidden="true"><rect x="3" y="3" width="18" height="2"/><rect x="3" y="7" width="18" height="3" fill-opacity=".45"/><rect x="3" y="11" width="18" height="2"/><rect x="3" y="15" width="18" height="3" fill-opacity=".45"/><rect x="3" y="19" width="18" height="2"/></svg></button><button class="klein icon" data-fit="pcb" title="Einpassen" aria-label="Einpassen"><svg viewBox="0 0 24 24" width="20" height="20" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M4 9V4h5M20 9V4h-5M4 15v5h5M20 15v5h-5"/></svg></button></div>
+      <div class="flaeche platine" id="f-pcb"><svg id="svg-pcb" xmlns="http://www.w3.org/2000/svg"></svg><div id="drei" hidden></div><div class="leer" id="leer-pcb">Keine Leiterplatte geladen</div>
+        <div id="ebenen" class="ebenen karte" hidden></div></div>
+    </div>
+    </div>
+  </section>
+</main>
+<script src="altium.js"></script>
+<script src="app.js"></script>
+</body>
+</html>

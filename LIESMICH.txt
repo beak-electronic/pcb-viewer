@@ -1,0 +1,4 @@
+PCB Viewer – Altium SchDoc/PcbDoc nur ansehen (keine Bearbeitung)
+Start: Ordner auf einen Webserver legen (z. B. wie DB mini) und index.html öffnen; danach als App installierbar und offline nutzbar.
+Lokal testen: im Ordner "python3 -m http.server 8000" und http://localhost:8000 öffnen.
+Dateien: Öffnen-Knopf oder per Drag&Drop (.SchDoc, .PcbDoc, .PrjPcb oder eine ZIP mit allem).
