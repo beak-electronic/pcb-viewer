@@ -361,6 +361,13 @@ function highlight(pan, from) {
     if (S.net.n >= 0) css += `#svg-pcb [data-n="${S.net.n}"].s{stroke:${P}!important} #svg-pcb [data-n="${S.net.n}"].f{fill:${P}!important} #svg-pcb g[data-l]:has([data-n="${S.net.n}"]){opacity:1}`;
     if (pan && !des) { if (S.net.from !== 'sch') { const b = netSchBox(); if (b) schPan.show(b); } if (S.net.from !== 'pcb') { const b = netPcbBox(); if (b) pcbPan.show(b); } }
   }
+  // Abdunkeln: alles außer Auswahl auf 30 %
+  const keepS = [], keepP = [];
+  if (des) { const e = CSS.escape(des); keepS.push(`g[data-des="${e}"] *`); const i = pcbIdx(des); if (i >= 0) keepP.push(`[data-c="${i}"]`); }
+  if (S.net) { (S.net.sheets.get(S.sheet) || []).forEach(g => keepS.push(`[data-g="${g}"]`, `[data-g="${g}"] *`)); if (S.net.n >= 0) keepP.push(`[data-n="${S.net.n}"]`); }
+  const L = ':is(line,polyline,polygon,rect,circle,ellipse,path,text)';
+  if (des || S.net) { css += `#svg-sch ${L}{opacity:.3} #svg-pcb ${L}{opacity:.3}`;
+    if (keepS.length) css += `#svg-sch :is(${keepS.join(',')}){opacity:1!important}`; if (keepP.length) css += `#svg-pcb :is(${keepP.join(',')}){opacity:1!important}`; }
   st.textContent = css;
 }
 function info() {
