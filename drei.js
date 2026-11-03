@@ -76,7 +76,7 @@ function neigZiel() { // -> [Drehung um Bildschirm-Senkrechte (Rollen), Drehung 
   if (NEIG.b0 === null) return [0, 0]; const w = (v, m) => { while (v > m) v -= 2 * m; while (v < -m) v += 2 * m; return v; };
   const db = w(NEIG.b - NEIG.b0, 180), dg = w(NEIG.g - NEIG.g0, 90), a = ((screen.orientation?.angle ?? window.orientation ?? 0) % 360 + 360) % 360;
   let pitch = db, roll = dg; if (a === 90) { pitch = dg; roll = -db; } else if (a === 270) { pitch = -dg; roll = db; } else if (a === 180) { pitch = -db; roll = -dg; }
-  const k = Math.PI / 180 * 0.7, lim = Math.PI / 6, c = v => Math.max(-lim, Math.min(lim, v * k)); return [c(pitch), c(roll)]; } // 7.8: Ausgaben getauscht (iPad-Test)
+  const k = Math.PI / 180 * 0.7, lim = Math.PI / 6, c = v => Math.max(-lim, Math.min(lim, v * k)); return [c(pitch), -c(roll)]; } // 7.8: Ausgaben getauscht (iPad-Test)
 const neuBasis = () => { NEIG.b0 = null; }; if (typeof window !== 'undefined') { screen.orientation?.addEventListener?.('change', neuBasis); addEventListener('orientationchange', neuBasis); }
 export const Drei = { neigung(on) { NEIG.aktiv = !!on; NEIG.b0 = null; if (R) R.dirty = true; }, _R: () => R,
   async show(box, pcb, H) {
