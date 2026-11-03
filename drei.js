@@ -69,6 +69,12 @@ function tex(svg) { return new Promise((res, rej) => { const img = new Image(); 
     const t = new THREE.CanvasTexture(c); t.colorSpace = THREE.SRGBColorSpace; t.anisotropy = 16; t.generateMipmaps = true; t.minFilter = THREE.LinearMipmapLinearFilter; res(t); }; img.onerror = rej; img.src = url; }); }
 function shapeFrom(pts, ox, oy) { const s = new THREE.Shape(); pts.forEach((p, i) => (i ? s.lineTo(p.x - ox, p.y - oy) : s.moveTo(p.x - ox, p.y - oy))); return s; }
 function outlinePts(ol) { const a = []; ol.forEach(v => { a.push({ x: v.x, y: v.y }); if (v.k === 1 && v.r > 0) { const sw = ((v.ea - v.sa) % 360 + 360) % 360 || 360; const n = Math.ceil(sw / 5); for (let i = 1; i < n; i++) { const t = (v.sa + sw * i / n) * Math.PI / 180; a.push({ x: v.cx + v.r * Math.cos(t), y: v.cy + v.r * Math.sin(t) }); } } }); return a; }
+// Neigungssensor (iPad/iPhone): dreht das Modell weich relativ zur Lage beim Öffnen der 3D-Ansicht; Ziehen/Drehen per Touch bleibt (OrbitControls)
+const NEIG = { an: false, b: 0, g: 0, b0: null, g0: null };
+if (typeof window !== 'undefined' && 'DeviceOrientationEvent' in window) addEventListener('deviceorientation', e => { if (e.beta == null || e.gamma == null) return; NEIG.an = true; NEIG.b = e.beta; NEIG.g = e.gamma; if (NEIG.b0 === null) { NEIG.b0 = e.beta; NEIG.g0 = e.gamma; } });
+function neigZiel() { if (NEIG.b0 === null) return [0, 0]; const db = NEIG.b - NEIG.b0, dg = NEIG.g - NEIG.g0, a = ((screen.orientation?.angle ?? window.orientation ?? 0) + 360) % 360;
+  let x = dg, y = db; if (a === 90) { x = db; y = -dg; } else if (a === 270) { x = -db; y = dg; } else if (a === 180) { x = -dg; y = -db; }
+  const k = Math.PI / 180 * 0.7, lim = Math.PI / 6, c = v => Math.max(-lim, Math.min(lim, v * k)); return [c(x), c(y)]; }
 export const Drei = { _R: () => R,
   async show(box, pcb, H) {
     if (R && R.pcb === pcb) { R.H = H; this.setSide(H.side); R.running = true; R.dirty = true; R.loop(); return; }
@@ -140,7 +146,8 @@ export const Drei = { _R: () => R,
     const R0 = R = { dirty: true, world, pcb, H, renderer, scene, cam, ctl, box, compMeshes, sel, T, size: Math.max(w, h), buildFaces, running: true, side: 'oben', selDes: null };
     const resize = () => { const r = box.getBoundingClientRect(); if (!r.width || !r.height) return; renderer.setSize(r.width, r.height, false); cam.aspect = r.width / r.height; cam.updateProjectionMatrix(); if (R) R.dirty = true; };
     R.ro = new ResizeObserver(resize); R.ro.observe(box); resize();
-    const span = Math.hypot(w, h); R.loop = () => { if (!R0.running || R !== R0) return; const moved = ctl.update();
+    const span = Math.hypot(w, h); NEIG.b0 = null; scene.rotation.set(0, 0, 0); R.loop = () => { if (!R0.running || R !== R0) return; const moved = ctl.update();
+      if (NEIG.an) { const [tx, ty] = neigZiel(); const ex = ty - scene.rotation.x, ey = tx - scene.rotation.y; if (Math.abs(ex) > 1e-4 || Math.abs(ey) > 1e-4) { scene.rotation.x += ex * 0.12; scene.rotation.y += ey * 0.12; R0.dirty = true; } }
       // Tiefenbereich an Abstand + Platinengröße anpassen (sonst Z-Fighting/Moiré bei großen Nutzen)
       const dist = cam.position.distanceTo(ctl.target), nr = Math.max(0.5, (dist - span) * 0.5, dist / 200), fr = dist + span * 2; if (Math.abs(cam.near - nr) > nr * 0.05 || Math.abs(cam.far - fr) > fr * 0.05) { cam.near = nr; cam.far = fr; cam.updateProjectionMatrix(); cam.userData.nf = true; }
       if (moved || R0.dirty || cam.userData.nf) { R0.dirty = false; cam.userData.nf = false; renderer.render(scene, cam); } requestAnimationFrame(R.loop); };
@@ -154,7 +161,7 @@ export const Drei = { _R: () => R,
     renderer.domElement.addEventListener('pointerup', e => { if (!down || Math.hypot(e.clientX - down.x, e.clientY - down.y) > 5) return; const r = renderer.domElement.getBoundingClientRect();
       const ray = new THREE.Raycaster(); ray.setFromCamera(new THREE.Vector2((e.clientX - r.left) / r.width * 2 - 1, -(e.clientY - r.top) / r.height * 2 + 1), cam);
       const hit = world.visible ? ray.intersectObjects(world.children, true)[0] : null; let des = hit ? d.comps[hit.object.userData.comp]?.des : null;
-      if (!hit) { const f = ray.intersectObjects(faces.children)[0]; if (f && R.H.onPickAt) { R.H.onPickAt(f.point.x + ox, f.point.y + oy); return; } if (f) { const x = f.point.x + ox, y = -(f.point.y + oy); let best = null, ba = Infinity; pcb.boxes.forEach((b, i) => { if (b && x >= b.x1 && x <= b.x2 && y >= b.y1 && y <= b.y2) { const a = (b.x2 - b.x1) * (b.y2 - b.y1); if (a < ba) { ba = a; best = d.comps[i].des; } } }); des = best; } }
+      if (!hit) { const f = ray.intersectObjects(faces.children)[0]; const fp = f ? scene.worldToLocal(f.point.clone()) : null; if (f && R.H.onPickAt) { R.H.onPickAt(fp.x + ox, fp.y + oy); return; } if (f) { const x = fp.x + ox, y = -(fp.y + oy); let best = null, ba = Infinity; pcb.boxes.forEach((b, i) => { if (b && x >= b.x1 && x <= b.x2 && y >= b.y1 && y <= b.y2) { const a = (b.x2 - b.x1) * (b.y2 - b.y1); if (a < ba) { ba = a; best = d.comps[i].des; } } }); des = best; } }
       R.H.onPick(des); });
   },
   setSide(side, force) { if (!R) return; if (R.side === side && !force) return; R.side = side; const D = R.size * 2.4; R.cam.up.set(0, 1, 0);

@@ -197,3 +197,51 @@ html.ist-dunkel .lade3d.strom { background:rgba(28,28,30,.9); color:#D0CDCE; }
 *, *::before, *::after { -webkit-backdrop-filter:none !important; backdrop-filter:none !important; }
 header#kopf { background:#fff !important; transform:none; }
 html.ist-dunkel header#kopf { background:#1C1C1E !important; }
+
+/* ===== 7.3 ===== */
+/* iOS-Blur oben: Kopfzeile wie DB mini fest oben (position:fixed). iOS 26 nimmt dann deren deckende Farbe für die Statusleiste,
+   statt Inhalt unter der Statusleiste weichzuzeichnen. Inhalt startet unter der gemessenen Kopfhöhe (--kopfh). */
+header#kopf { position:fixed; top:0; left:0; right:0; z-index:30; }
+body { padding-top:var(--kopfh, 60px); }
+html, body { touch-action:manipulation; overscroll-behavior:none; }
+
+/* Leiterplatte: Platine schwarz hinterlegt, außen Hintergrund (hell weiß / dunkel #101010) */
+#svg-pcb .platinengrund { fill:#000; }
+#svg-pcb .ausschnitt, #svg-pcb .dimaus { fill:#fff; }
+html.ist-dunkel #svg-pcb .ausschnitt, html.ist-dunkel #svg-pcb .dimaus { fill:#101010; }
+#svg-pcb .dimplatine { fill:#000; }
+
+/* Schaltbild dunkel: helleres Grau */
+html.ist-dunkel .flaeche.papier { background:#B4B4B8; }
+
+/* Info-Leiste + Ebenen-Leiste (gleicher Stil), dunkel mit hellem Text */
+#f-pcb .ebenenleiste { position:absolute; left:8px; right:8px; bottom:8px; z-index:3; padding:6px 8px; background:rgba(255,255,255,.94); color:rgba(0,0,0,.9);
+  border:1px solid #D9D7D8; border-radius:10px; box-shadow:0 4px 16px rgba(0,0,0,.12); overflow-x:auto; overflow-y:hidden; -webkit-overflow-scrolling:touch; scrollbar-width:none; }
+#f-pcb .ebenenleiste::-webkit-scrollbar { display:none; }
+.ebreihe { display:flex; gap:4px; align-items:center; white-space:nowrap; width:max-content; }
+.ebenenleiste button.eb { min-height:32px; padding:0 10px 0 6px; border:0; background:transparent !important; color:inherit; font-size:14px; font-weight:600; display:inline-flex; align-items:center; gap:7px; border-radius:8px; }
+.ebenenleiste button.eb:active { background:rgba(216,3,115,.10) !important; }
+.ebenenleiste .farbe { width:18px; height:18px; flex:none; border-radius:3px; border:1px solid rgba(0,0,0,.35); background:linear-gradient(to top right, transparent calc(50% - .6px), #9A9A9E calc(50% - .6px), #9A9A9E calc(50% + .6px), transparent calc(50% + .6px)); }
+.ebenenleiste button.eb.an .farbe { background:var(--c); }
+.ebenenleiste button.eb:not(.an) { opacity:.75; }
+html.ist-dunkel #f-sch .info, html.ist-dunkel #f-pcb .ebenenleiste { background:rgba(28,28,30,.94); color:rgba(255,255,255,.92); border-color:#3A3A3C; box-shadow:0 4px 16px rgba(0,0,0,.45); }
+html.ist-dunkel .ebenenleiste .farbe { border-color:rgba(255,255,255,.35); }
+#ebenenKnopf.an, html.ist-dunkel #ebenenKnopf.an, .leiste #ebenenKnopf.an { background:var(--pink) !important; border-color:var(--pink) !important; color:#fff !important; }
+
+/* Anzeige: zwei Symbolknöpfe */
+#ansichtTabs { flex:none; }
+#ansichtTabs button.icon { min-width:46px; min-height:44px; }
+header#kopf #ansichtTabs button.an, html.ist-dunkel header#kopf #ansichtTabs button.an { background:var(--pink); color:#fff; }
+
+/* iPhone: eine Ansicht, Umschalter, schmale Kopfzeile */
+@media (max-width: 599px) {
+  header#kopf { gap:8px; padding-left:calc(env(safe-area-inset-left) + 8px); padding-right:calc(env(safe-area-inset-right) + 8px); min-height:52px; }
+  header#kopf .oeffnen { padding:0 10px; font-size:0; } header#kopf .oeffnen svg { margin-right:0 !important; }
+  .projekt { font-size:15px; flex:1 1 auto; } nav#tabs { flex:0 1 auto; flex-wrap:nowrap; gap:6px; }
+  .sucheWrap input { width:104px; }
+  #ansichtTabs button.icon { min-width:40px; padding:0 6px; }
+  main { padding:6px calc(6px + env(safe-area-inset-right)) max(6px, env(safe-area-inset-bottom)) calc(6px + env(safe-area-inset-left)); }
+  .pane { padding:6px; }
+  .ansicht.sch #p-sch, .ansicht.pcb #p-pcb { flex:1 1 0 !important; height:auto !important; width:auto !important; }
+  .einzeile .bk, .einzeile .nr { font-size:16px !important; } .einzeile .bez { font-size:14px !important; }
+}

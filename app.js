@@ -5,7 +5,9 @@ const $ = s => document.querySelector(s), $$ = s => [...document.querySelectorAl
 const esc = s => String(s ?? '').replace(/[&<>"]/g, c => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;' }[c]));
 const bgr = c => { c = +c || 0; return '#' + [c & 255, c >> 8 & 255, c >> 16 & 255].map(v => v.toString(16).padStart(2, '0')).join(''); };
 const f2 = v => Math.round(v * 1000) / 1000;
-const S = { sheets: [], sheet: 0, pcb: null, prj: null, sel: null, dim: '2d', side: 'oben', hidden: new Set([35, 36, 37, 38]) };
+const S = { sheets: [], sheet: 0, pcb: null, prj: null, sel: null, dim: '2d', side: 'oben', hidden: new Set(), view: { sch: true, pcb: true }, phonePane: 'sch' };
+// Ebenen: nie zeigen / immer zeigen (ohne Schalter)
+const EB_NIE = new Set([37, 38, 56, 58, 60, 61, 62, 55, 73]), EB_IMMER = new Set([35, 36, 74, 901]);
 
 // ---------------- Pan/Zoom ----------------
 class Pan {
@@ -35,7 +37,7 @@ class Pan {
   zoomAt(cx, cy, f) { const p = this.toData(cx, cy); const k = this.k() * f; if (k <= 0) return; const r = this.rect();
     this.vb.w = r.width * k; this.vb.h = r.height * k; this.vb.x = p.x - (cx - r.left) * k; this.vb.y = p.y - (cy - r.top) * k; this.apply(); }
   set(bb) { this.bb = bb; this.fit(); }
-  fit() { const r = this.rect(), b = this.bb; if (!b || !r.width || !r.height) return; const m = 0.04;
+  fit() { const r = this.rect(), b = this.bb; if (!b) return; if (!r.width || !r.height) { this.needFit = true; return; } this.needFit = false; const m = 0.04;
     const k = Math.max((b.x2 - b.x1) * (1 + 2 * m) / r.width, (b.y2 - b.y1) * (1 + 2 * m) / r.height) || 1;
     this.vb = { w: r.width * k, h: r.height * k }; this.vb.x = (b.x1 + b.x2) / 2 - this.vb.w / 2; this.vb.y = (b.y1 + b.y2) / 2 - this.vb.h / 2; this.apply(); }
   ensure(b) { // nur verschieben, wenn nicht vollständig sichtbar – minimal, mit Rand
@@ -50,7 +52,7 @@ class Pan {
     if (bw > v.w * 0.9 || bh > v.h * 0.9) { const r = this.rect(); const k = Math.max(bw * 1.6 / r.width, bh * 1.6 / r.height); this.vb.w = r.width * k; this.vb.h = r.height * k; this.center(b); return; }
     this.ensure(b); }
   resize() { const r = this.rect(); if (!r.width || !r.height) return;
-    if (!this.inited) { this.inited = true; return this.fit(); }
+    if (!this.inited || this.needFit) { this.inited = true; return this.fit(); }
     const k = this.prevW ? this.vb.w / this.prevW : this.k(); const cx = this.vb.x + this.vb.w / 2, cy = this.vb.y + this.vb.h / 2;
     this.vb.w = r.width * k; this.vb.h = r.height * k; this.vb.x = cx - this.vb.w / 2; this.vb.y = cy - this.vb.h / 2;
     const sb = this.selBox && this.selBox(); if (sb) this.ensure(sb); else this.apply(); }
@@ -212,7 +214,18 @@ const STROKE = (() => { const g = {
   '(': '3,6 2,5 2,1 3,0', ')': '1,6 2,5 2,1 1,0', ':': '2,1 2,1.01|2,4 2,4.01', '%': '0,0 4,6|0.5,5 0.5,5.01|3.5,1 3.5,1.01', '#': '1,0 1,6|3,0 3,6|0,2 4,2|0,4 4,4', '*': '2,1 2,5|0,2 4,4|0,4 4,2',
   "'": '2,6 2,4', '"': '1,6 1,4|3,6 3,4', '<': '4,5 0,3 4,1', '>': '0,5 4,3 0,1', '?': '0,5 1,6 3,6 4,5 4,4 2,3 2,2|2,0 2,0.01', '!': '2,6 2,2|2,0 2,0.01', '&': '4,0 1,4 1,5 2,6 3,5 3,4 0,2 0,1 1,0 2,0 4,2', 'µ': '0,-2 0,4|0,1 1,0 3,0 4,1|4,4 4,0', 'Ω': '0,0 1,0 1,1 0,2 0,4 1,6 3,6 4,4 4,2 3,1 3,0 4,0', '°': '1,6 2,6 2,5 1,5 1,6',
 }; const out = {}; for (const k in g) out[k] = g[k].split('|').map(s => s.split(' ').map(q => q.split(',').map(Number))); return out; })();
-function strokeText(t, dc) { // Altium: Höhe = Zeichenhöhe inkl. Strichbreite, Ursprung unten links
+function strokeText(t, dc) { // Altium-Strichschrift: Glyphen auf Texthöhe normiert (Großbuchstabe = Höhe), Ursprung unten links, Vorschub je Zeichen aus Altium-Tabelle
+  const AS = self.ALTIUM_STROKE; if (!AS) return strokeTextAlt(t, dc);
+  const F = AS[t.sfont >= 1 && t.sfont <= 3 ? t.sfont : 1] || AS[1], h = t.h, sw = t.sw || h / 10; let d = '';
+  const zeilen = String(t.text).replace(/\r\n?/g, '\n').split('\n');
+  zeilen.forEach((z, zi) => { let cx = 0; const yo = h * 1.68 * (zeilen.length - 1 - zi);
+    for (const ch of z) { const g = F[ch.codePointAt(0)] || F[63]; const n = g.length - 1;
+      for (let i = 0; i < n; i++) { const pts = g[i].split(' '); d += 'M' + pts.map(q => { const [gx, gy] = q.split(','); return f2(cx + gx * h) + ',' + f2(-(yo + gy * h)); }).join('L'); if (pts.length === 1) d += 'l0.01,0'; }
+      cx += g[n] * h; } });
+  const x = t.x, y = -t.y; let tr = `translate(${f2(x)} ${f2(y)}) rotate(${f2(-t.rot)})`; if (t.mirror) tr += ' scale(-1 1)';
+  return `<path class="s"${dc} d="${d}" fill="none" stroke-width="${f2(sw)}" stroke-linecap="round" stroke-linejoin="round" transform="${tr}"/>`;
+}
+function strokeTextAlt(t, dc) { // Rückfall, falls strichschrift.js fehlt
   const sw = t.sw || t.h / 10, s = Math.max(t.h - sw, t.h * 0.5) / 6, sxw = s * 1.25, adv = 7.7 * s; let d = '', cx = 0;
   for (const ch of String(t.text)) { const gl = STROKE[ch] || STROKE[ch.toUpperCase()]; if (gl) { const lower = ch !== ch.toUpperCase(), k = lower ? 0.72 : 1;
       for (const pl of gl) d += 'M' + pl.map(([gx, gy]) => f2(cx + sw / 2 + gx * sxw) + ',' + f2(-(sw / 2 + gy * s * k))).join('L'); }
@@ -222,9 +235,9 @@ function strokeText(t, dc) { // Altium: Höhe = Zeichenhöhe inkl. Strichbreite,
 }
 function textEl(t, dc, extra = '') {
   if (t.stroke !== false) return strokeText(t, dc);
-  const x = t.x, y = -t.y, fs = t.h * 1.3;
+  const x = t.x, y = -t.y, fs = t.h / 1.117, base = y - fs * 0.212; // Arial-Metrik: Ascent 0,905 + Descent 0,212 em
   let tr = `rotate(${f2(-t.rot)} ${f2(x)} ${f2(y)})`; if (t.mirror) tr += ` translate(${f2(2 * x)} 0) scale(-1 1)`;
-  return `<text class="f"${dc} x="${f2(x)}" y="${f2(y)}" font-size="${f2(fs)}" font-family="${esc(t.font || 'Arial')}, Arial, sans-serif"${t.bold ? ' font-weight="700"' : ''}${t.italic ? ' font-style="italic"' : ''} transform="${tr}"${extra}>${esc(t.text)}</text>`;
+  return `<text class="f"${dc} x="${f2(x)}" y="${f2(base)}" font-size="${f2(fs)}" font-family="'${esc(t.font || 'Arial')}', Arial, sans-serif"${t.bold ? ' font-weight="700"' : ''}${t.italic ? ' font-style="italic"' : ''} transform="${tr}"${extra}>${esc(t.text)}</text>`;
 }
 function pcbLayers(d, opt = {}) { // -> Map layer -> [svg strings]
   const L = new Map(), add = (l, s) => { if (!L.has(l)) L.set(l, []); L.get(l).push(s); };
@@ -300,25 +313,30 @@ function compBoxes(d) {
 function drawOrder(side) {
   const mids = []; for (let i = 2; i <= 31; i++) mids.push(i); for (let i = 39; i <= 54; i++) mids.push(i);
   const mech = []; for (let i = 57; i <= 72; i++) mech.push(i);
-  const top = [1, 35, 37, 33], bot = [32, 36, 38, 34];
+  const top = [35, 1, 37, 33], bot = [36, 32, 38, 34]; // Paste unter Kupfer (wie Altium-Ansicht)
   return side === 'unten' ? [...top, ...mids, ...bot, ...mech, 55, 56, 73, 74, 901, 902] : [...bot, ...mids, ...top, ...mech, 55, 56, 73, 74, 901, 902];
 }
 function renderPcb() {
-  const d = S.pcb.data, L = S.pcb.layers; let s = '';
+  const d = S.pcb.data, L = S.pcb.layers; S.pcb.boardPath = outlinePath(d.outline || []) + cutPath(d);
+  let s = d.outline && d.outline.length ? `<path class="platinengrund" d="${S.pcb.boardPath}" fill-rule="evenodd" pointer-events="none"/>` : '';
   for (const l of drawOrder(S.side)) {
-    if (l === 902) { if ((d.cutouts || []).length) s += `<path class="ausschnitt" d="${cutPath(d)}" fill="#0A0A0A"/>`; continue; }
-    if (!L.has(l)) continue; const c = layerColor(l), hole = l === 901;
-    s += `<g data-l="${l}" fill="${hole ? '#101010' : c}" stroke="${c}" stroke-linecap="round" fill-opacity="${hole ? 1 : l === 37 || l === 38 ? 0.45 : 0.85}" stroke-opacity="${hole ? 1 : l === 37 || l === 38 ? 0.45 : 0.85}"${S.hidden.has(l) ? ' display="none"' : ''}>${L.get(l).join('')}</g>`;
+    if (l === 902) { if ((d.cutouts || []).length) s += `<path class="ausschnitt" d="${cutPath(d)}"/>`; continue; }
+    if (!L.has(l) || EB_NIE.has(l)) continue; const c = layerColor(l), hole = l === 901;
+    s += `<g data-l="${l}" fill="${hole ? '#101010' : c}" stroke="${c}" stroke-linecap="round" fill-opacity="${hole ? 1 : l === 37 || l === 38 ? 0.45 : 0.85}" stroke-opacity="${hole ? 1 : l === 37 || l === 38 ? 0.45 : 0.85}"${S.hidden.has(l) && !EB_IMMER.has(l) ? ' display="none"' : ''}>${L.get(l).join('')}</g>`;
   }
   s += '<g id="pcb-hl"></g>';
   $('#svg-pcb').innerHTML = `<g id="pcbwelt"${S.side === 'unten' ? ' transform="scale(-1 1)"' : ''}>${s}</g>`;
   const b = pcbBox(d); S.pcb.bb = S.side === 'unten' ? { x1: -b.x2, x2: -b.x1, y1: b.y1, y2: b.y2 } : b; pcbPan.bb = S.pcb.bb;
   highlight(false);
 }
+function ebenenListe() { // Reihenfolge: Kupfer (Top, Mid…, Planes, Bottom), Overlay oben/unten, Mechanical 1, 3 (weitere Mech.), Bauteile 3D
+  const L = S.pcb.layers, o = [1]; for (let i = 2; i <= 31; i++) o.push(i); for (let i = 39; i <= 54; i++) o.push(i); o.push(32, 33, 34, 57, 59); for (let i = 63; i <= 72; i++) o.push(i);
+  return [...o.filter(l => L.has(l) && !EB_NIE.has(l) && !EB_IMMER.has(l)), 950]; }
+function ebenenName(l) { const n = S.pcb.data.layerNames[l];
+  if (l === 1) return 'Top Layer'; if (l === 32) return 'Bottom Layer'; if (l === 33) return 'Top Overlay'; if (l === 34) return 'Bottom Overlay'; if (l === 950) return 'Bauteile 3D';
+  if (l >= 2 && l <= 31) return n || 'Mid Layer ' + (l - 1); if (l >= 39 && l <= 54) return n || 'Internal Plane ' + (l - 38); if (l >= 57 && l <= 72) return 'Mechanical ' + (l - 56); return n || 'Layer ' + l; }
 function buildLayerPanel() {
-  const L = S.pcb.layers, have = [...new Set([...L.keys(), 950])].sort((a, b) => (a === 950 ? 999 : drawOrder('oben').indexOf(a)) - (b === 950 ? 999 : drawOrder('oben').indexOf(b)));
-  $('#ebenen').innerHTML = '<div class="klein" style="font-weight:700;margin-bottom:4px">Ebenen anzeigen</div>' + have.map(l => `<label><input type="checkbox" data-l="${l}"${S.hidden.has(l) ? '' : ' checked'}><span class="farbe" style="background:${layerColor(l)}"></span>${esc(LAYER_DE[l] || S.pcb.data.layerNames[l] || ('Layer ' + l))}</label>`).join('')
-    + '<div class="zeile" style="display:flex;gap:6px;margin-top:6px"><button class="klein" id="alleEb">Alle</button><button class="klein" id="kuEb">Nur Kupfer</button></div>';
+  $('#ebenen').innerHTML = '<div class="ebreihe">' + ebenenListe().map(l => `<button type="button" class="eb${S.hidden.has(l) ? '' : ' an'}" data-l="${l}" aria-pressed="${!S.hidden.has(l)}" title="${esc(ebenenName(l))} ein/aus"><span class="farbe" style="--c:${layerColor(l)}"></span>${esc(ebenenName(l))}</button>`).join('') + '</div>';
 }
 
 // ---------------- Auswahl ----------------
@@ -347,10 +365,11 @@ function compAt(where, q, sideOnly) { let best = null, ba = Infinity; const vis 
   if (where === 'pcb') S.pcb.boxes.forEach((b, i) => { if (b && vis(S.pcb.data.comps[i]) && inside(b, q) && area(b) < ba) { ba = area(b); best = S.pcb.data.comps[i].des; } });
   return best; }
 function pick(where, p) {
-  if (where === 'sch' && curSheet()) { const g = schGroupAt(p); if (g !== null) { S.sel = null; setNet({ sheet: S.sheet, g }, 'sch'); return select(null, 'sch', true); } setNet(null); return select(compAt('sch', p), 'sch'); }
+  if (where === 'sch' && curSheet()) { const g = schGroupAt(p); if (g !== null && !S.sel && S.net && S.net.sheets.get(S.sheet)?.has(g)) { setNet(null); return select(null, 'sch'); } if (g !== null) { S.sel = null; setNet({ sheet: S.sheet, g }, 'sch'); return select(null, 'sch', true); } setNet(null); return select(compAt('sch', p), 'sch'); }
   if ((where === 'pcb' || where === '3d') && S.pcb) { const q = where === 'pcb' && S.side === 'unten' ? { x: -p.x, y: p.y } : p; const h = pcbHitAt(q.x, -q.y);
     // Priorität: innerhalb einer Bauteilfläche (sichtbare Seite) immer nur das Bauteil
     const cd = compAt('pcb', q, true); if (cd) { setNet(null); return select(cd, where); }
+    if (h && h.net >= 0 && !S.sel && S.net && S.net.n === h.net) { setNet(null); return select(null, where); }
     if (h && h.kind === 'pad') { setNet(h.net >= 0 ? { n: h.net } : null, 'pcb'); return select(null, where, true); }
     if (h) { setNet({ n: h.net }, 'pcb'); return select(null, where, true); }
     setNet(null); return select(compAt('pcb', q), where); }
@@ -410,15 +429,17 @@ function highlight(pan, from) {
   void L; st.textContent = css;
   // Abdunkeln als Ganzes: Overlay über die fertige Zeichnung, Auswahl als Kopie obenauf
   const ob = b => b ? `x="${b.x1 - 2000}" y="${b.y1 - 2000}" width="${b.x2 - b.x1 + 4000}" height="${b.y2 - b.y1 + 4000}"` : 'x="-1e5" y="-1e5" width="2e5" height="2e5"', BIG = ob(S.pcb && S.pcb.bb), BIGS = ob(curSheet() && curSheet().r.bb), shl = document.getElementById('sch-hl'), phl = document.getElementById('pcb-hl');
-  if (shl) { shl.innerHTML = ''; if (des || S.net) { shl.insertAdjacentHTML('beforeend', `<rect ${BIGS} fill="${dk ? '#8E8E93' : '#fff'}" opacity=".7" pointer-events="none"/>`);
+  if (shl) { shl.innerHTML = ''; if (des || S.net) { shl.insertAdjacentHTML('beforeend', `<rect ${BIGS} fill="${dk ? '#B4B4B8' : '#fff'}" opacity=".7" pointer-events="none"/>`);
     const top = document.createElementNS('http://www.w3.org/2000/svg', 'g'); top.setAttribute('pointer-events', 'none');
     if (des) document.querySelectorAll(`#svg-sch g[data-des="${CSS.escape(des)}"]`).forEach(g => { if (!shl.contains(g)) top.appendChild(g.cloneNode(true)); });
     (S.net?.sheets.get(S.sheet) || []).forEach(g => document.querySelectorAll(`#svg-sch [data-g="${g}"]`).forEach(n => { if (!shl.contains(n)) top.appendChild(n.cloneNode(true)); }));
     shl.appendChild(top); } }
-  if (phl) { phl.innerHTML = ''; if ((des || S.net) && keepP.length) { phl.insertAdjacentHTML('beforeend', `<rect ${BIG} fill="${dk ? '#101010' : '#fff'}" opacity=".7" pointer-events="none"/>`);
+  const pdim = () => { const m = BIG.match(/-?\d[\d.e+-]*/g).map(Number), [x, y, w, h] = m, bp = S.pcb?.boardPath || '';
+    return `<path class="dimaus" d="M${x},${y}h${w}v${h}h${-w}Z${bp}" fill-rule="evenodd" opacity=".5" pointer-events="none"/>` + (bp ? `<path class="dimplatine" d="${bp}" fill-rule="evenodd" opacity=".5" pointer-events="none"/>` : ''); };
+  if (phl) { phl.innerHTML = ''; if ((des || S.net) && keepP.length) { phl.insertAdjacentHTML('beforeend', pdim());
     const sel = keepP.join(','); document.querySelectorAll('#svg-pcb g[data-l]').forEach(g => { if (g.getAttribute('display') === 'none') return; const ms = g.querySelectorAll(sel); if (!ms.length) return;
       const c = g.cloneNode(false); c.setAttribute('fill-opacity', '1'); c.setAttribute('stroke-opacity', '1'); c.setAttribute('pointer-events', 'none'); ms.forEach(m => c.appendChild(m.cloneNode(true))); phl.appendChild(c); }); const h = document.querySelector('#svg-pcb g[data-l="901"]'); if (h && h.getAttribute('display') !== 'none') { const c = h.cloneNode(true); c.setAttribute('pointer-events', 'none'); phl.appendChild(c); } }
-    else if (des || S.net) phl.insertAdjacentHTML('beforeend', `<rect ${BIG} fill="${dk ? '#101010' : '#fff'}" opacity=".7" pointer-events="none"/>`); }
+    else if (des || S.net) phl.insertAdjacentHTML('beforeend', pdim()); }
 }
 function info() {
   const des = S.sel, el = $('#info');
@@ -473,7 +494,7 @@ function switchPcb(i, keep = true) { if (!S.pcbs[i] || S.pcbs[i] === S.pcb) retu
   if (S.dim === '3d') start3d(); if (keep) { highlight(true, 'sch'); info(); if (window.Drei && S.dim === '3d') window.Drei.select(S.sel); } }
 function showSheet(fit = true) { const s = curSheet(); $('#schTitel').textContent = s ? noExt(s.name) + (S.sheets.length > 1 ? ' ▾' : '') : 'Schaltplan'; const multi = S.sheets.length > 1; $('#schTitel').classList.toggle('klickbar', multi); $('#schTitel').setAttribute('role', multi ? 'button' : 'heading'); $('#schTitel').title = s ? noExt(s.name) + (multi ? ' – Blatt wählen' : '') : ''; $('#blattMenu').innerHTML = S.sheets.map((x, i) => `<button data-i="${i}"${i === S.sheet ? ' class="an"' : ''}>${i + 1}. ${esc(x.name.replace(/\.schdoc$/i, ''))}</button>`).join(''); $('#svg-sch').innerHTML = s ? s.r.svg : ''; $('#leer-sch').hidden = !!s; if (s) { schPan.bb = s.r.bb; if (fit) schPan.fit(); } highlight(false); }
 function show() {
-  $('#v-start').hidden = true; $('#v-view').hidden = false; $('#ansichtTabs').hidden = false; $('#sucheWrap').hidden = false;
+  $('#v-start').hidden = true; $('#v-view').hidden = false; $('#ansichtTabs').hidden = false; $('#sucheWrap').hidden = false; applyView();
   $('#projekt').textContent = S.prj || ''; $('#projekt').title = [...S.sheets.map(s => noExt(s.name)), noExt(S.pcb?.name)].filter(Boolean).join('\n');
   const all = new Set(); S.sheets.forEach(s => Object.keys(s.r.comps).forEach(d => all.add(d))); (S.pcbs || []).forEach(p => p.data.comps.forEach(c => all.add(c.des)));
   $('#desListe').innerHTML = [...all].sort((a, b) => a.localeCompare(b, 'de', { numeric: true })).map(d => `<option value="${esc(d)}">`).join('');
@@ -506,9 +527,18 @@ $('#beispiel').addEventListener('click', async () => {
   try { const files = await Promise.all(names.map(async n => { const r = await fetch('beispiel/' + encodeURIComponent(n)); if (!r.ok) throw new Error(n); return { name: n, buf: await r.arrayBuffer() }; })); load(files); }
   catch (e) { $('#meldung').className = 'meldung fehler'; $('#meldung').textContent = 'Beispiel nicht gefunden: ' + e.message; }
 });
-$('#anzeigeKnopf').addEventListener('click', e => { e.stopPropagation(); $('#anzeigeMenu').hidden = !$('#anzeigeMenu').hidden; });
-document.addEventListener('click', e => { if (!e.target.closest('#ansichtTabs')) $('#anzeigeMenu').hidden = true; });
-$$('#anzeigeMenu button').forEach(b => b.addEventListener('click', () => { $$('#anzeigeMenu button').forEach(x => x.classList.toggle('an', x === b)); const v = $('#v-view'); v.classList.remove('sch', 'pcb', 'beide'); v.classList.add(b.dataset.a); $('#anzeigeMenu').hidden = true; }));
+// Anzeige: zwei Symbolknöpfe Schaltbild / Leiterplatte (iPhone: Umschalter, nur eine Ansicht)
+const istPhone = () => matchMedia('(max-width: 599px)').matches;
+function applyView() { const v = $('#v-view'), ph = istPhone(); let a;
+  if (ph) a = S.phonePane; else a = S.view.sch && S.view.pcb ? 'beide' : S.view.sch ? 'sch' : 'pcb';
+  v.classList.remove('sch', 'pcb', 'beide'); v.classList.add(a); $('#ansichtTabs').classList.toggle('phone', ph);
+  $$('#ansichtTabs button').forEach(b => { const on = ph ? b.dataset.p === S.phonePane : S.view[b.dataset.p]; b.classList.toggle('an', on); b.setAttribute('aria-pressed', String(on)); });
+  requestAnimationFrame(() => { if (S.sel || S.net) highlight(true); if (S.dim === '3d') window.Drei?.fit?.(); }); }
+$$('#ansichtTabs button').forEach(b => b.addEventListener('click', () => { const p = b.dataset.p, o = p === 'sch' ? 'pcb' : 'sch';
+  if (istPhone()) S.phonePane = S.phonePane === 'sch' ? 'pcb' : 'sch'; // Umschalter: überall antippen schaltet um
+  else if (S.view[p] && !S.view[o]) { S.view[p] = false; S.view[o] = true; } else S.view[p] = !S.view[p];
+  applyView(); }));
+matchMedia('(max-width: 599px)').addEventListener('change', applyView);
 $$('[data-fit]').forEach(b => b.addEventListener('click', () => { if (b.dataset.fit === 'sch') schPan.fit(); else if (S.dim === '3d') window.Drei?.fit(); else pcbPan.fit(); }));
 $('#pcbTitel').addEventListener('click', e => { if ((S.pcbs || []).length < 2) return; e.stopPropagation(); $('#platMenu').hidden = !$('#platMenu').hidden; });
 document.addEventListener('click', e => { if (!e.target.closest('#platWrap')) $('#platMenu').hidden = true; });
@@ -516,13 +546,12 @@ $('#platMenu').addEventListener('click', e => { const b = e.target.closest('butt
 $('#schTitel').addEventListener('click', e => { if (S.sheets.length < 2) return; e.stopPropagation(); $('#blattMenu').hidden = !$('#blattMenu').hidden; });
 document.addEventListener('click', e => { if (!e.target.closest('#blattWrap')) $('#blattMenu').hidden = true; });
 $('#blattMenu').addEventListener('click', e => { const b = e.target.closest('button[data-i]'); if (!b) return; S.sheet = +b.dataset.i; showSheet(true); $('#blattMenu').hidden = true; });
-$$('#seite button').forEach(b => b.addEventListener('click', () => { S.side = b.dataset.s; $$('#seite button').forEach(x => x.classList.toggle('an', x === b)); if (!S.pcb) return;
+$$('#seite button').forEach(b0 => b0.addEventListener('click', () => { const b = $('#seite button:not(.an)') || b0; S.side = b.dataset.s; $$('#seite button').forEach(x => x.classList.toggle('an', x === b)); if (!S.pcb) return;
   const k = pcbPan.k(); renderPcb(); const sb = S.sel && pcbSelBox(S.sel); if (sb) pcbPan.center(sb); else { pcbPan.vb.x = -pcbPan.vb.x - pcbPan.vb.w; pcbPan.apply(); } void k; window.Drei?.setSide?.(S.side); }));
-$$('#dim button').forEach(b => b.addEventListener('click', () => { $$('#dim button').forEach(x => x.classList.toggle('an', x === b)); if (b.dataset.d === '3d') { S.dim = '3d'; start3d(); } else set2d(); }));
-$('#ebenenKnopf').addEventListener('click', () => { $('#ebenen').hidden = !$('#ebenen').hidden; });
-$('#ebenen').addEventListener('change', e => { const l = +e.target.dataset.l; if (e.target.checked) S.hidden.delete(l); else S.hidden.add(l); const g = $(`#svg-pcb g[data-l="${l}"]`); if (g) g.style.display = e.target.checked ? '' : 'none'; if (S.dim === '3d') window.Drei?.layers?.(S.hidden); });
-$('#ebenen').addEventListener('click', e => { if (e.target.id !== 'alleEb' && e.target.id !== 'kuEb') return; const keep = e.target.id === 'kuEb' ? new Set([1, 32, 74, 901, ...Array.from({ length: 46 }, (_, i) => i + 2).filter(i => i <= 31 || (i >= 39 && i <= 54))]) : null;
-  S.hidden = new Set(); if (keep) S.pcb.layers.forEach((_, l) => { if (!keep.has(l)) S.hidden.add(l); }); buildLayerPanel(); renderPcb(); if (S.dim === '3d') window.Drei?.layers?.(S.hidden); });
+$$('#dim button').forEach(b0 => b0.addEventListener('click', () => { const b = $('#dim button:not(.an)') || b0; $$('#dim button').forEach(x => x.classList.toggle('an', x === b)); if (b.dataset.d === '3d') { S.dim = '3d'; window.Drei3dNeigung?.(); start3d(); } else set2d(); }));
+$('#ebenenKnopf').addEventListener('click', () => { const z = !$('#ebenen').hidden; $('#ebenen').hidden = z; $('#ebenenKnopf').classList.toggle('an', !z); $('#ebenenKnopf').setAttribute('aria-pressed', String(!z)); });
+$('#ebenen').addEventListener('click', e => { const b = e.target.closest('button.eb'); if (!b) return; const l = +b.dataset.l, an = S.hidden.has(l); if (an) S.hidden.delete(l); else S.hidden.add(l);
+  b.classList.toggle('an', an); b.setAttribute('aria-pressed', String(an)); const g = $(`#svg-pcb g[data-l="${l}"]`); if (g) { g.removeAttribute('display'); g.style.display = an ? '' : 'none'; if (!an) g.setAttribute('display', 'none'); } highlight(false); if (S.dim === '3d') window.Drei?.layers?.(S.hidden); });
 const sucheAus = () => { const e = { target: $('#suche') }; const v = e.target.value.trim(); if (!v) return select(null); const all = [...$('#desListe').options].map(o => o.value); let m = all.find(d => d.toLowerCase() === v.toLowerCase()); if (!m) { const c = all.filter(d => d.toLowerCase().startsWith(v.toLowerCase())); if (c.length === 1) m = c[0]; } if (m) { e.target.value = m; select(m, 'suche'); } };
 $('#suche').addEventListener('change', sucheAus);
 $('#sucheWrap').addEventListener('submit', e => { e.preventDefault(); sucheAus(); $('#suche').blur(); });
@@ -572,7 +601,6 @@ $('#wversion').textContent = 'PCB Viewer · Version ' + (self.PCBV_VERSION || ''
 (() => {
   const offen = () => {
     const l = [];
-    if (!$('#ebenen').hidden) l.push({ el: $('#ebenen'), zone: [$('#ebenen'), $('#ebenenKnopf')], zu: () => { $('#ebenen').hidden = true; } });
     $$('.menu').forEach(m => { if (!m.hidden) l.push({ el: m, zone: [m.closest('.menuWrap') || m.parentElement], zu: () => { m.hidden = true; } }); });
     $$('.leiste.offen').forEach(le => { const w = le.querySelector('.werkzeuge'), hb = le.querySelector('.hamburger'); l.push({ el: w, zone: [w, hb], zu: () => { le.classList.remove('offen'); hb.classList.remove('an'); hb.setAttribute('aria-expanded', 'false'); } }); });
     return l; };
@@ -583,16 +611,21 @@ $('#wversion').textContent = 'PCB Viewer · Version ' + (self.PCBV_VERSION || ''
     const drin = l.filter(p => p.zone.some(z => z && z.contains(e.target)));
     const weg = l.filter(p => !drin.includes(p)); if (!weg.length) return;
     weg.forEach(p => p.zu());
-    if (!drin.length && !e.target.closest('#ebenenKnopf, #anzeigeKnopf, .titelWrap, .hamburger')) { schlucken = true; e.stopPropagation(); e.preventDefault(); setTimeout(() => { schlucken = false; }, 600); }
+    if (!drin.length && !e.target.closest('#ebenenKnopf, #ansichtTabs, .titelWrap, .hamburger')) { schlucken = true; e.stopPropagation(); e.preventDefault(); setTimeout(() => { schlucken = false; }, 600); }
   }, true);
   ['pointerup', 'mouseup', 'click', 'touchend'].forEach(t => document.addEventListener(t, eat, true));
   document.addEventListener('keydown', e => { if (e.key === 'Escape') offen().forEach(p => p.zu()); });
 })();
 // Knopf eines offenen Popovers in BEAK-Pink
 (() => {
-  const P = [['#ebenen', '#ebenenKnopf'], ['#anzeigeMenu', '#anzeigeKnopf'], ['#blattMenu', '#schTitel'], ['#platMenu', '#pcbTitel']];
+  const P = [['#blattMenu', '#schTitel'], ['#platMenu', '#pcbTitel']];
   P.forEach(([m, k]) => { const me = $(m), kn = $(k); if (!me || !kn) return; const set = () => { kn.classList.toggle('popAn', !me.hidden); kn.setAttribute('aria-expanded', String(!me.hidden)); }; new MutationObserver(set).observe(me, { attributes: true, attributeFilter: ['hidden'] }); set(); });
 })();
 
 // Systemanzeige live: Hervorhebung + 3D-Hintergrund nachziehen
 window.matchMedia('(prefers-color-scheme: dark)').addEventListener('change', () => setTimeout(() => { try { highlight(false); } catch (e) {} window.Drei?.theme?.(); }, 0));
+
+// Kopfhöhe messen (Kopfzeile ist position:fixed wie in DB mini)
+(() => { const k = $('#kopf'); const setz = () => document.documentElement.style.setProperty('--kopfh', k.offsetHeight + 'px'); new ResizeObserver(setz).observe(k); setz(); addEventListener('orientationchange', () => setTimeout(setz, 300)); })();
+// Neigungssensor: iOS verlangt die Erlaubnis aus einer Nutzeraktion (Umschalten auf 3D)
+window.Drei3dNeigung = () => { const D = window.DeviceOrientationEvent; if (!D || !matchMedia('(pointer: coarse)').matches) return; if (typeof D.requestPermission === 'function') D.requestPermission().catch(() => {}); };
