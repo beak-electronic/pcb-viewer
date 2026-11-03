@@ -72,9 +72,12 @@ function outlinePts(ol) { const a = []; ol.forEach(v => { a.push({ x: v.x, y: v.
 // Neigungssensor (iPad/iPhone): dreht das Modell weich relativ zur Lage beim Öffnen der 3D-Ansicht; Ziehen/Drehen per Touch bleibt (OrbitControls)
 const NEIG = { an: false, b: 0, g: 0, b0: null, g0: null };
 if (typeof window !== 'undefined' && 'DeviceOrientationEvent' in window) addEventListener('deviceorientation', e => { if (e.beta == null || e.gamma == null) return; NEIG.an = true; NEIG.b = e.beta; NEIG.g = e.gamma; if (NEIG.b0 === null) { NEIG.b0 = e.beta; NEIG.g0 = e.gamma; } });
-function neigZiel() { if (NEIG.b0 === null) return [0, 0]; const db = NEIG.b - NEIG.b0, dg = NEIG.g - NEIG.g0, a = ((screen.orientation?.angle ?? window.orientation ?? 0) + 360) % 360;
-  let x = dg, y = db; if (a === 90) { x = db; y = -dg; } else if (a === 270) { x = -db; y = dg; } else if (a === 180) { x = -dg; y = -db; }
-  const k = Math.PI / 180 * 0.7, lim = Math.PI / 6, c = v => Math.max(-lim, Math.min(lim, v * k)); return [c(x), c(y)]; }
+function neigZiel() { // -> [Drehung um Bildschirm-Senkrechte (Rollen), Drehung um Bildschirm-Waagrechte (Nicken)]
+  if (NEIG.b0 === null) return [0, 0]; const w = (v, m) => { while (v > m) v -= 2 * m; while (v < -m) v += 2 * m; return v; };
+  const db = w(NEIG.b - NEIG.b0, 180), dg = w(NEIG.g - NEIG.g0, 90), a = ((screen.orientation?.angle ?? window.orientation ?? 0) % 360 + 360) % 360;
+  let pitch = db, roll = dg; if (a === 90) { pitch = dg; roll = -db; } else if (a === 270) { pitch = -dg; roll = db; } else if (a === 180) { pitch = -db; roll = -dg; }
+  const k = Math.PI / 180 * 0.7, lim = Math.PI / 6, c = v => Math.max(-lim, Math.min(lim, v * k)); return [c(roll), c(pitch)]; }
+const neuBasis = () => { NEIG.b0 = null; }; if (typeof window !== 'undefined') { screen.orientation?.addEventListener?.('change', neuBasis); addEventListener('orientationchange', neuBasis); }
 export const Drei = { _R: () => R,
   async show(box, pcb, H) {
     if (R && R.pcb === pcb) { R.H = H; this.setSide(H.side); R.running = true; R.dirty = true; R.loop(); return; }
