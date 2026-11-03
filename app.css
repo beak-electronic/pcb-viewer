@@ -262,3 +262,6 @@ header#kopf #ansichtTabs button.an, html.ist-dunkel header#kopf #ansichtTabs but
 html.ist-dunkel .scrollpfeil.rechts { background:linear-gradient(to right, rgba(28,28,30,0), rgba(28,28,30,.97) 55%) !important; }
 html.ist-dunkel .scrollpfeil.links { background:linear-gradient(to left, rgba(28,28,30,0), rgba(28,28,30,.97) 55%) !important; }
 .scrollpfeil[hidden] { display:none !important; }
+
+/* 7.7: Trenner am Rand = Fenster wird ausgeblendet */
+.trenner.rand span { background:var(--pink) !important; }

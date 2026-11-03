@@ -538,6 +538,7 @@ function applyView() { const v = $('#v-view'), ph = istPhone(); let a;
 $$('#ansichtTabs button').forEach(b => b.addEventListener('click', () => { const p = b.dataset.p, o = p === 'sch' ? 'pcb' : 'sch';
   if (istPhone()) S.phonePane = S.phonePane === 'sch' ? 'pcb' : 'sch'; // Umschalter: überall antippen schaltet um
   else if (S.view[p] && !S.view[o]) { S.view[p] = false; S.view[o] = true; } else S.view[p] = !S.view[p];
+  if (!istPhone() && S.view.sch && S.view.pcb) window.splitMitte?.();
   applyView(); }));
 matchMedia('(max-width: 599px)').addEventListener('change', applyView);
 $$('[data-fit]').forEach(b => b.addEventListener('click', () => { if (b.dataset.fit === 'sch') schPan.fit(); else if (S.dim === '3d') window.Drei?.fit(); else pcbPan.fit(); }));
@@ -560,10 +561,12 @@ $('#suche').addEventListener('keydown', e => { if (e.key === 'Enter') { e.preven
 document.addEventListener('keydown', e => { if (e.key === 'Escape') select(null); });
 // Trenner
 (() => { const tr = $('#trenner'), panes = $('#panes'); let v = +localStorage.getItem('beak-pcbv-split') || 50; const setv = x => { v = Math.min(85, Math.max(15, x)); panes.style.setProperty('--split', v + '%'); };
-  setv(v); let drag = false, x0 = 0, y0 = 0, moved = false; const quer = () => getComputedStyle(panes).flexDirection === 'column';
+  setv(v); window.splitMitte = () => { setv(50); try { localStorage.setItem('beak-pcbv-split', '50'); } catch (_) {} }; let drag = false, x0 = 0, y0 = 0, moved = false, rand = null; const quer = () => getComputedStyle(panes).flexDirection === 'column';
   tr.addEventListener('pointerdown', e => { drag = true; moved = false; x0 = e.clientX; y0 = e.clientY; tr.setPointerCapture(e.pointerId); tr.classList.add('zieht'); });
-  tr.addEventListener('pointermove', e => { if (!drag) return; if (!moved && Math.hypot(e.clientX - x0, e.clientY - y0) < 4) return; moved = true; const r = panes.getBoundingClientRect(); setv(quer() ? (e.clientY - r.top) / r.height * 100 : (e.clientX - r.left) / r.width * 100); });
-  const end = e => { if (!drag) return; drag = false; tr.classList.remove('zieht'); if (e && e.type === 'pointerup' && !moved) setv(50); try { localStorage.setItem('beak-pcbv-split', String(v)); } catch (_) {} };
+  tr.addEventListener('pointermove', e => { if (!drag) return; if (!moved && Math.hypot(e.clientX - x0, e.clientY - y0) < 4) return; moved = true; const r = panes.getBoundingClientRect(), q = quer(), pos = q ? e.clientY - r.top : e.clientX - r.left, len = q ? r.height : r.width; rand = pos < 60 ? 'sch' : pos > len - 60 ? 'pcb' : null; tr.classList.toggle('rand', !!rand); setv(quer() ? (e.clientY - r.top) / r.height * 100 : (e.clientX - r.left) / r.width * 100); });
+  const end = e => { if (!drag) return; drag = false; tr.classList.remove('zieht', 'rand'); if (e && e.type === 'pointerup' && !moved) setv(50);
+    // Ganz an den Rand gezogen: Fenster auf dieser Seite ausblenden, Knopf inaktiv; Trenner für später wieder mittig
+    if (e && e.type === 'pointerup' && moved && rand && !istPhone()) { const o = rand === 'sch' ? 'pcb' : 'sch'; S.view[rand] = false; S.view[o] = true; setv(50); applyView(); } rand = null; try { localStorage.setItem('beak-pcbv-split', String(v)); } catch (_) {} };
   tr.addEventListener('pointerup', end); tr.addEventListener('pointercancel', end);
 })();
 // Dateien über „Öffnen mit“ (installierte App, File Handling API)
