@@ -173,7 +173,7 @@ function renderSch(recs) {
 
 // ---------------- Leiterplatte 2D ----------------
 // Altium-Standardfarben (die PcbDoc speichert keine Lagenfarben, nur Deckkraft in 2DCONFIGURATION)
-const MID = ['#BC8E00', '#70DBFA', '#00CC66', '#9966FF', '#00FFFF', '#800080', '#FF00FF', '#808000', '#FFFF00', '#808080', '#FFFFFF', '#800080', '#808000', '#C0C0C0'];
+const MID = ['#70DBFA', '#BC8E00', '#00CC66', '#9966FF', '#00FFFF', '#800080', '#FF00FF', '#808000', '#FFFF00', '#808080', '#FFFFFF', '#800080', '#808000', '#C0C0C0'];
 const PLANE = ['#008000', '#800000', '#808000', '#000080', '#008080', '#800080', '#C0C0C0', '#808080'];
 const MECH = ['#C000C0', '#008080', '#808000', '#00A0C0', '#C08000', '#8080FF', '#40C040', '#FF8080'];
 function layerColor(l) {

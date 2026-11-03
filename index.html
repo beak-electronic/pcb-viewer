@@ -37,7 +37,7 @@
   <div id="projekt" class="projekt"></div>
   <nav id="tabs">
     <form class="sucheWrap" id="sucheWrap" role="search" action="#" hidden><input id="suche" type="search" enterkeyhint="search" inputmode="search" list="desListe" placeholder="Bauteil suchen" autocomplete="off" autocapitalize="characters" spellcheck="false"><datalist id="desListe"></datalist></form>
-    <div class="umschalter ansicht2" id="ansichtTabs" hidden><button type="button" class="icon an" data-p="sch" title="Schaltbild" aria-label="Schaltbild" aria-pressed="true"><svg viewBox="0 0 24 24" width="22" height="22" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M2 12h3l2-4 3 8 3-8 3 8 2-4h4"/></svg></button><button type="button" class="icon an" data-p="pcb" title="Leiterplatte" aria-label="Leiterplatte" aria-pressed="true"><svg viewBox="0 0 24 24" width="22" height="22" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><rect x="3" y="4" width="18" height="16" rx="2"/><circle cx="8" cy="9" r="1.6"/><circle cx="16" cy="15" r="1.6"/><path d="M9.6 9H13l3 4.4"/></svg></button></div>
+    <div class="ansicht2" id="ansichtTabs" hidden><button type="button" class="tab icon an" data-p="sch" title="Schaltbild" aria-label="Schaltbild" aria-pressed="true"><svg viewBox="0 0 24 24" width="22" height="22" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M2 12h8M14 12h8M10 5v14M14 5v14"/></svg></button><button type="button" class="tab icon an" data-p="pcb" title="Leiterplatte" aria-label="Leiterplatte" aria-pressed="true"><svg viewBox="0 0 24 24" width="22" height="22" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><rect x="3" y="4" width="18" height="16" rx="2"/><circle cx="8" cy="9" r="1.6"/><circle cx="16" cy="15" r="1.6"/><path d="M9.6 9H13l3 4.4"/></svg></button></div>
   </nav>
 </header>
 <main>
@@ -53,6 +53,7 @@
       </div>
       <p id="meldung" class="meldung"></p>
       <p class="wversion" id="wversion">PCB Viewer</p>
+        <p class="wversion wlizenz">Freie Software unter <a href="LICENSE" target="_blank" rel="noopener">AGPL-3.0</a> · <a href="https://github.com/beak-electronic/pcb-viewer" target="_blank" rel="noopener">Quellcode</a> · Altium-Strichschrift aus <a href="https://github.com/wavenumber-eng/altium_monkey" target="_blank" rel="noopener">altium_monkey</a></p>
     </div>
   </section>
   <section id="v-view" class="ansicht beide" hidden>
