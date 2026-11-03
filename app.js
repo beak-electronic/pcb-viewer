@@ -336,7 +336,8 @@ function ebenenName(l) { const n = S.pcb.data.layerNames[l];
   if (l === 1) return 'Top Layer'; if (l === 32) return 'Bottom Layer'; if (l === 33) return 'Top Overlay'; if (l === 34) return 'Bottom Overlay'; if (l === 950) return 'Bauteile 3D';
   if (l >= 2 && l <= 31) return n || 'Mid Layer ' + (l - 1); if (l >= 39 && l <= 54) return n || 'Internal Plane ' + (l - 38); if (l >= 57 && l <= 72) return 'Mechanical ' + (l - 56); return n || 'Layer ' + l; }
 function buildLayerPanel() {
-  $('#ebenen').innerHTML = '<div class="ebreihe">' + ebenenListe().map(l => `<button type="button" class="eb${S.hidden.has(l) ? '' : ' an'}" data-l="${l}" aria-pressed="${!S.hidden.has(l)}" title="${esc(ebenenName(l))} ein/aus"><span class="farbe" style="--c:${layerColor(l)}"></span>${esc(ebenenName(l))}</button>`).join('') + '</div>';
+  $('#ebenen').innerHTML = '<div class="ebscroll"><div class="ebreihe">' + ebenenListe().map(l => `<button type="button" class="eb${S.hidden.has(l) ? '' : ' an'}" data-l="${l}" aria-pressed="${!S.hidden.has(l)}" title="${esc(ebenenName(l))} ein/aus"><span class="farbe" style="--c:${layerColor(l)}"></span>${esc(ebenenName(l))}</button>`).join('') + '</div></div><button type="button" class="scrollpfeil links" aria-label="Nach links" hidden><svg viewBox="0 0 24 24" width="20" height="20" fill="none" stroke="currentColor" stroke-width="2.6" stroke-linecap="round" stroke-linejoin="round"><path d="M15 5l-7 7 7 7"/></svg></button><button type="button" class="scrollpfeil rechts" aria-label="Nach rechts" hidden><svg viewBox="0 0 24 24" width="20" height="20" fill="none" stroke="currentColor" stroke-width="2.6" stroke-linecap="round" stroke-linejoin="round"><path d="M9 5l7 7-7 7"/></svg></button>';
+  scrollPfeile($('#ebenen'));
 }
 
 // ---------------- Auswahl ----------------
@@ -629,3 +630,11 @@ window.matchMedia('(prefers-color-scheme: dark)').addEventListener('change', () 
 (() => { const k = $('#kopf'); const setz = () => document.documentElement.style.setProperty('--kopfh', k.offsetHeight + 'px'); new ResizeObserver(setz).observe(k); setz(); addEventListener('orientationchange', () => setTimeout(setz, 300)); })();
 // Neigungssensor: iOS verlangt die Erlaubnis aus einer Nutzeraktion (Umschalten auf 3D)
 window.Drei3dNeigung = () => { const D = window.DeviceOrientationEvent; if (!D || !matchMedia('(pointer: coarse)').matches) return; if (typeof D.requestPermission === 'function') D.requestPermission().catch(() => {}); };
+
+// Scrollpfeile für waagrecht scrollbare Leisten (Ebenenleiste u. a.): rechts/links einblenden, Antippen = ca. eine Seite weiter
+function scrollPfeile(bar) { const sc = bar.querySelector('.ebscroll'), L = bar.querySelector('.scrollpfeil.links'), Rr = bar.querySelector('.scrollpfeil.rechts'); if (!sc || !L || !Rr) return;
+  const upd = () => { const max = sc.scrollWidth - sc.clientWidth; L.hidden = sc.scrollLeft <= 2; Rr.hidden = max <= 2 || sc.scrollLeft >= max - 2; };
+  const go = dir => sc.scrollBy({ left: dir * Math.max(80, sc.clientWidth * 0.85), behavior: 'smooth' });
+  L.addEventListener('click', e => { e.stopPropagation(); go(-1); }); Rr.addEventListener('click', e => { e.stopPropagation(); go(1); });
+  sc.addEventListener('scroll', upd, { passive: true }); if (!bar._ro) { bar._ro = new ResizeObserver(() => bar._upd && bar._upd()); bar._ro.observe(bar); } bar._upd = upd;
+  new MutationObserver(upd).observe(bar, { attributes: true, attributeFilter: ['hidden'] }); requestAnimationFrame(upd); }
