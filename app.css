@@ -265,3 +265,5 @@ html.ist-dunkel .scrollpfeil.links { background:linear-gradient(to left, rgba(28
 
 /* 7.7: Trenner am Rand = Fenster wird ausgeblendet */
 .trenner.rand span { background:var(--pink) !important; }
+
+#neigKnopf.an, html.ist-dunkel #neigKnopf.an { background:var(--pink) !important; border-color:var(--pink) !important; color:#fff !important; }

@@ -70,15 +70,15 @@ function tex(svg) { return new Promise((res, rej) => { const img = new Image(); 
 function shapeFrom(pts, ox, oy) { const s = new THREE.Shape(); pts.forEach((p, i) => (i ? s.lineTo(p.x - ox, p.y - oy) : s.moveTo(p.x - ox, p.y - oy))); return s; }
 function outlinePts(ol) { const a = []; ol.forEach(v => { a.push({ x: v.x, y: v.y }); if (v.k === 1 && v.r > 0) { const sw = ((v.ea - v.sa) % 360 + 360) % 360 || 360; const n = Math.ceil(sw / 5); for (let i = 1; i < n; i++) { const t = (v.sa + sw * i / n) * Math.PI / 180; a.push({ x: v.cx + v.r * Math.cos(t), y: v.cy + v.r * Math.sin(t) }); } } }); return a; }
 // Neigungssensor (iPad/iPhone): dreht das Modell weich relativ zur Lage beim Öffnen der 3D-Ansicht; Ziehen/Drehen per Touch bleibt (OrbitControls)
-const NEIG = { an: false, b: 0, g: 0, b0: null, g0: null };
+const NEIG = { aktiv: false, an: false, b: 0, g: 0, b0: null, g0: null };
 if (typeof window !== 'undefined' && 'DeviceOrientationEvent' in window) addEventListener('deviceorientation', e => { if (e.beta == null || e.gamma == null) return; NEIG.an = true; NEIG.b = e.beta; NEIG.g = e.gamma; if (NEIG.b0 === null) { NEIG.b0 = e.beta; NEIG.g0 = e.gamma; } });
 function neigZiel() { // -> [Drehung um Bildschirm-Senkrechte (Rollen), Drehung um Bildschirm-Waagrechte (Nicken)]
   if (NEIG.b0 === null) return [0, 0]; const w = (v, m) => { while (v > m) v -= 2 * m; while (v < -m) v += 2 * m; return v; };
   const db = w(NEIG.b - NEIG.b0, 180), dg = w(NEIG.g - NEIG.g0, 90), a = ((screen.orientation?.angle ?? window.orientation ?? 0) % 360 + 360) % 360;
   let pitch = db, roll = dg; if (a === 90) { pitch = dg; roll = -db; } else if (a === 270) { pitch = -dg; roll = db; } else if (a === 180) { pitch = -db; roll = -dg; }
-  const k = Math.PI / 180 * 0.7, lim = Math.PI / 6, c = v => Math.max(-lim, Math.min(lim, v * k)); return [c(roll), c(pitch)]; }
+  const k = Math.PI / 180 * 0.7, lim = Math.PI / 6, c = v => Math.max(-lim, Math.min(lim, v * k)); return [c(pitch), c(roll)]; } // 7.8: Ausgaben getauscht (iPad-Test)
 const neuBasis = () => { NEIG.b0 = null; }; if (typeof window !== 'undefined') { screen.orientation?.addEventListener?.('change', neuBasis); addEventListener('orientationchange', neuBasis); }
-export const Drei = { _R: () => R,
+export const Drei = { neigung(on) { NEIG.aktiv = !!on; NEIG.b0 = null; if (R) R.dirty = true; }, _R: () => R,
   async show(box, pcb, H) {
     if (R && R.pcb === pcb) { R.H = H; this.setSide(H.side); R.running = true; R.dirty = true; R.loop(); return; }
     const T0 = performance.now(); this.stop(); if (R) { R.dead = true; R.renderer.dispose(); box.innerHTML = ''; }
@@ -150,7 +150,7 @@ export const Drei = { _R: () => R,
     const resize = () => { const r = box.getBoundingClientRect(); if (!r.width || !r.height) return; renderer.setSize(r.width, r.height, false); cam.aspect = r.width / r.height; cam.updateProjectionMatrix(); if (R) R.dirty = true; };
     R.ro = new ResizeObserver(resize); R.ro.observe(box); resize();
     const span = Math.hypot(w, h); NEIG.b0 = null; scene.rotation.set(0, 0, 0); R.loop = () => { if (!R0.running || R !== R0) return; const moved = ctl.update();
-      if (NEIG.an) { const [tx, ty] = neigZiel(); const ex = ty - scene.rotation.x, ey = tx - scene.rotation.y; if (Math.abs(ex) > 1e-4 || Math.abs(ey) > 1e-4) { scene.rotation.x += ex * 0.12; scene.rotation.y += ey * 0.12; R0.dirty = true; } }
+      if (NEIG.an || scene.rotation.x || scene.rotation.y) { const [tx, ty] = NEIG.aktiv && NEIG.an ? neigZiel() : [0, 0]; const ex = ty - scene.rotation.x, ey = tx - scene.rotation.y; if (Math.abs(ex) > 1e-4 || Math.abs(ey) > 1e-4) { scene.rotation.x += ex * 0.12; scene.rotation.y += ey * 0.12; R0.dirty = true; } }
       // Tiefenbereich an Abstand + Platinengröße anpassen (sonst Z-Fighting/Moiré bei großen Nutzen)
       const dist = cam.position.distanceTo(ctl.target), nr = Math.max(0.5, (dist - span) * 0.5, dist / 200), fr = dist + span * 2; if (Math.abs(cam.near - nr) > nr * 0.05 || Math.abs(cam.far - fr) > fr * 0.05) { cam.near = nr; cam.far = fr; cam.updateProjectionMatrix(); cam.userData.nf = true; }
       if (moved || R0.dirty || cam.userData.nf) { R0.dirty = false; cam.userData.nf = false; renderer.render(scene, cam); } requestAnimationFrame(R.loop); };

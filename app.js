@@ -512,7 +512,7 @@ async function start3d() {
   if (!S.pcb) return; const box = $('#drei'); box.hidden = false; $('#svg-pcb').style.visibility = 'hidden';
   try { if (!window.Drei) { const m = await import('./drei.js'); window.Drei = m.Drei; }
     await window.Drei.show(box, S.pcb, { onPick: des => { S.net = null; select(des, '3d'); }, onPickAt: (x, y) => pick('3d', { x, y: -y }), side: S.side, hidden: S.hidden, pcbLayers, layerColor, outlinePath, textEl, padEl });
-    window.Drei.select(S.sel);
+    window.Drei.select(S.sel); window.Drei.neigung?.(NEIG_AN);
   } catch (e) { console.error(e); alert('3D-Ansicht nicht verfügbar: ' + e.message); set2d(); }
 }
 function set2d() { S.dim = '2d'; $('#drei').hidden = true; $('#svg-pcb').style.visibility = ''; $$('#dim button').forEach(b => b.classList.toggle('an', b.dataset.d === '2d')); window.Drei?.stop?.(); }
@@ -550,7 +550,7 @@ document.addEventListener('click', e => { if (!e.target.closest('#blattWrap')) $
 $('#blattMenu').addEventListener('click', e => { const b = e.target.closest('button[data-i]'); if (!b) return; S.sheet = +b.dataset.i; showSheet(true); $('#blattMenu').hidden = true; });
 $$('#seite button').forEach(b0 => b0.addEventListener('click', () => { const b = $('#seite button:not(.an)') || b0; S.side = b.dataset.s; $$('#seite button').forEach(x => x.classList.toggle('an', x === b)); if (!S.pcb) return;
   const k = pcbPan.k(); renderPcb(); const sb = S.sel && pcbSelBox(S.sel); if (sb) pcbPan.center(sb); else { pcbPan.vb.x = -pcbPan.vb.x - pcbPan.vb.w; pcbPan.apply(); } void k; window.Drei?.setSide?.(S.side); }));
-$$('#dim button').forEach(b0 => b0.addEventListener('click', () => { const b = $('#dim button:not(.an)') || b0; $$('#dim button').forEach(x => x.classList.toggle('an', x === b)); if (b.dataset.d === '3d') { S.dim = '3d'; window.Drei3dNeigung?.(); start3d(); } else set2d(); }));
+$$('#dim button').forEach(b0 => b0.addEventListener('click', () => { const b = $('#dim button:not(.an)') || b0; $$('#dim button').forEach(x => x.classList.toggle('an', x === b)); $('#neigKnopf').hidden = b.dataset.d !== '3d' || !matchMedia('(pointer: coarse)').matches; if (b.dataset.d === '3d') { S.dim = '3d'; start3d(); } else set2d(); }));
 $('#ebenenKnopf').addEventListener('click', () => { const z = !$('#ebenen').hidden; $('#ebenen').hidden = z; $('#ebenenKnopf').classList.toggle('an', !z); $('#ebenenKnopf').setAttribute('aria-pressed', String(!z)); });
 $('#ebenen').addEventListener('click', e => { const b = e.target.closest('button.eb'); if (!b) return; const l = +b.dataset.l, an = S.hidden.has(l); if (an) S.hidden.delete(l); else S.hidden.add(l);
   b.classList.toggle('an', an); b.setAttribute('aria-pressed', String(an)); const g = $(`#svg-pcb g[data-l="${l}"]`); if (g) { g.removeAttribute('display'); g.style.display = an ? '' : 'none'; if (!an) g.setAttribute('display', 'none'); } highlight(false); if (S.dim === '3d') window.Drei?.layers?.(S.hidden); });
@@ -631,8 +631,14 @@ window.matchMedia('(prefers-color-scheme: dark)').addEventListener('change', () 
 
 // Kopfhöhe messen (Kopfzeile ist position:fixed wie in DB mini)
 (() => { const k = $('#kopf'); const setz = () => document.documentElement.style.setProperty('--kopfh', k.offsetHeight + 'px'); new ResizeObserver(setz).observe(k); setz(); addEventListener('orientationchange', () => setTimeout(setz, 300)); })();
-// Neigungssensor: iOS verlangt die Erlaubnis aus einer Nutzeraktion (Umschalten auf 3D)
-window.Drei3dNeigung = () => { const D = window.DeviceOrientationEvent; if (!D || !matchMedia('(pointer: coarse)').matches) return; if (typeof D.requestPermission === 'function') D.requestPermission().catch(() => {}); };
+// Neigungssensor: standardmäßig aus; Schalter in der 3D-Leiste. iOS-Erlaubnis nur beim Antippen (höchstens einmal je Start), nie automatisch.
+let NEIG_AN = false, NEIG_ERLAUBT = false; try { NEIG_AN = localStorage.getItem('beak-pcbv-neigung') === '1'; } catch (_) {}
+const neigZeigen = () => { const k = $('#neigKnopf'); k.classList.toggle('an', NEIG_AN); k.setAttribute('aria-pressed', String(NEIG_AN)); window.Drei?.neigung?.(NEIG_AN); try { localStorage.setItem('beak-pcbv-neigung', NEIG_AN ? '1' : '0'); } catch (_) {} };
+$('#neigKnopf').addEventListener('click', () => { const D = window.DeviceOrientationEvent, frag = D && typeof D.requestPermission === 'function';
+  const ein = () => { if (!frag || NEIG_ERLAUBT) { NEIG_AN = true; neigZeigen(); return; } D.requestPermission().then(r => { NEIG_ERLAUBT = r === 'granted'; NEIG_AN = NEIG_ERLAUBT; neigZeigen(); }).catch(() => { NEIG_AN = false; neigZeigen(); }); };
+  if (NEIG_AN && frag && !NEIG_ERLAUBT) return ein(); // gespeichert „an“, Erlaubnis in diesem Start noch nicht erteilt -> nur nachfragen
+  if (NEIG_AN) { NEIG_AN = false; neigZeigen(); } else ein(); });
+neigZeigen();
 
 // Scrollpfeile für waagrecht scrollbare Leisten (Ebenenleiste u. a.): rechts/links einblenden, Antippen = ca. eine Seite weiter
 function scrollPfeile(bar) { const sc = bar.querySelector('.ebscroll'), L = bar.querySelector('.scrollpfeil.links'), Rr = bar.querySelector('.scrollpfeil.rechts'); if (!sc || !L || !Rr) return;
