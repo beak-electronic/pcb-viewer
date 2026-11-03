@@ -550,7 +550,7 @@ document.addEventListener('click', e => { if (!e.target.closest('#blattWrap')) $
 $('#blattMenu').addEventListener('click', e => { const b = e.target.closest('button[data-i]'); if (!b) return; S.sheet = +b.dataset.i; showSheet(true); $('#blattMenu').hidden = true; });
 $$('#seite button').forEach(b0 => b0.addEventListener('click', () => { const b = $('#seite button:not(.an)') || b0; S.side = b.dataset.s; $$('#seite button').forEach(x => x.classList.toggle('an', x === b)); if (!S.pcb) return;
   const k = pcbPan.k(); renderPcb(); const sb = S.sel && pcbSelBox(S.sel); if (sb) pcbPan.center(sb); else { pcbPan.vb.x = -pcbPan.vb.x - pcbPan.vb.w; pcbPan.apply(); } void k; window.Drei?.setSide?.(S.side); }));
-$$('#dim button').forEach(b0 => b0.addEventListener('click', () => { const b = $('#dim button:not(.an)') || b0; $$('#dim button').forEach(x => x.classList.toggle('an', x === b)); $('#neigKnopf').hidden = b.dataset.d !== '3d' || !matchMedia('(pointer: coarse)').matches; if (b.dataset.d === '3d') { S.dim = '3d'; start3d(); } else set2d(); }));
+$$('#dim button').forEach(b0 => b0.addEventListener('click', () => { const b = $('#dim button:not(.an)') || b0; $$('#dim button').forEach(x => x.classList.toggle('an', x === b)); NEIG_AN = false; neigZeigen(); $('#neigKnopf').hidden = b.dataset.d !== '3d' || !matchMedia('(pointer: coarse)').matches; if (b.dataset.d === '3d') { S.dim = '3d'; start3d(); } else set2d(); }));
 $('#ebenenKnopf').addEventListener('click', () => { const z = !$('#ebenen').hidden; $('#ebenen').hidden = z; $('#ebenenKnopf').classList.toggle('an', !z); $('#ebenenKnopf').setAttribute('aria-pressed', String(!z)); });
 $('#ebenen').addEventListener('click', e => { const b = e.target.closest('button.eb'); if (!b) return; const l = +b.dataset.l, an = S.hidden.has(l); if (an) S.hidden.delete(l); else S.hidden.add(l);
   b.classList.toggle('an', an); b.setAttribute('aria-pressed', String(an)); const g = $(`#svg-pcb g[data-l="${l}"]`); if (g) { g.removeAttribute('display'); g.style.display = an ? '' : 'none'; if (!an) g.setAttribute('display', 'none'); } highlight(false); if (S.dim === '3d') window.Drei?.layers?.(S.hidden); });
@@ -632,11 +632,10 @@ window.matchMedia('(prefers-color-scheme: dark)').addEventListener('change', () 
 // Kopfhöhe messen (Kopfzeile ist position:fixed wie in DB mini)
 (() => { const k = $('#kopf'); const setz = () => document.documentElement.style.setProperty('--kopfh', k.offsetHeight + 'px'); new ResizeObserver(setz).observe(k); setz(); addEventListener('orientationchange', () => setTimeout(setz, 300)); })();
 // Neigungssensor: standardmäßig aus; Schalter in der 3D-Leiste. iOS-Erlaubnis nur beim Antippen (höchstens einmal je Start), nie automatisch.
-let NEIG_AN = false, NEIG_ERLAUBT = false; try { NEIG_AN = localStorage.getItem('beak-pcbv-neigung') === '1'; } catch (_) {}
-const neigZeigen = () => { const k = $('#neigKnopf'); k.classList.toggle('an', NEIG_AN); k.setAttribute('aria-pressed', String(NEIG_AN)); window.Drei?.neigung?.(NEIG_AN); try { localStorage.setItem('beak-pcbv-neigung', NEIG_AN ? '1' : '0'); } catch (_) {} };
+let NEIG_AN = false, NEIG_ERLAUBT = false; try { localStorage.removeItem('beak-pcbv-neigung'); } catch (_) {}
+const neigZeigen = () => { const k = $('#neigKnopf'); k.classList.toggle('an', NEIG_AN); k.setAttribute('aria-pressed', String(NEIG_AN)); window.Drei?.neigung?.(NEIG_AN); };
 $('#neigKnopf').addEventListener('click', () => { const D = window.DeviceOrientationEvent, frag = D && typeof D.requestPermission === 'function';
   const ein = () => { if (!frag || NEIG_ERLAUBT) { NEIG_AN = true; neigZeigen(); return; } D.requestPermission().then(r => { NEIG_ERLAUBT = r === 'granted'; NEIG_AN = NEIG_ERLAUBT; neigZeigen(); }).catch(() => { NEIG_AN = false; neigZeigen(); }); };
-  if (NEIG_AN && frag && !NEIG_ERLAUBT) return ein(); // gespeichert „an“, Erlaubnis in diesem Start noch nicht erteilt -> nur nachfragen
   if (NEIG_AN) { NEIG_AN = false; neigZeigen(); } else ein(); });
 neigZeigen();
 
